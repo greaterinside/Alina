@@ -14,6 +14,28 @@ import { WORKSPACES, type WorkspaceId } from "@/lib/types";
 
 export const runtime = "nodejs";
 
+/**
+ * Supabase/Postgrest errors (and some fetch failures) are plain objects,
+ * not Error instances — `String(err)` on those collapses to the useless
+ * "[object Object]". Pull out whatever message/detail fields exist instead.
+ */
+function describeError(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (err && typeof err === "object") {
+    const e = err as Record<string, unknown>;
+    const parts = [e.message, e.details, e.hint, e.code].filter(
+      (v): v is string => typeof v === "string" && v.length > 0
+    );
+    if (parts.length > 0) return parts.join(" — ");
+    try {
+      return JSON.stringify(err);
+    } catch {
+      // fall through
+    }
+  }
+  return String(err);
+}
+
 interface AskBody {
   workspace: WorkspaceId;
   mode: "chat" | "typing";
@@ -87,7 +109,7 @@ export async function POST(req: NextRequest) {
     });
   } catch (err) {
     console.error("[/api/ask]", err);
-    const detail = err instanceof Error ? err.message : String(err);
+    const detail = describeError(err);
     return NextResponse.json(
       {
         // Internal tool, not public-facing — surfacing the real error (a
