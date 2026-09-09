@@ -84,6 +84,31 @@ this script is the one-time catch-up for what already exists. Needs
 present). See the script's own header comment for the Voyage model /
 vector-dimension assumption it makes.
 
+## GitHub ingestion
+
+`tech.github_docs` (see `supabase/migrations/0002_github_docs.sql`) holds
+READMEs, architecture-decision docs, and merged-PR descriptions pulled from
+every repo the Greater Inside GitHub App is installed on — one row per
+doc, embedded the same way as the other five tables so Tech Ask can cite
+it.
+
+```bash
+node scripts/ingest-github.mjs
+```
+
+Safe to re-run (upserts on `repo, doc_type, path`). Needs `GITHUB_APP_ID`,
+`GITHUB_APP_PRIVATE_KEY`, and `GITHUB_INSTALLATION_ID` on top of the
+Supabase/Voyage keys the backfill script needs — see the script's own
+header comment for what it does and doesn't cover yet (no incremental
+sync cursor, capped at 50 most-recent merged PRs per repo).
+
+**This table isn't wired into `match_knowledge` yet.** That function lives
+in Supabase, not in this repo, and only knows about the original six
+tables — it needs a new branch added for `tech.github_docs` before GitHub
+content shows up in any Ask answer. Pull the function's current definition
+(`select pg_get_functiondef('public.match_knowledge'::regproc);` in the
+SQL Editor) and add the union branch before relying on this.
+
 ## Env vars
 
 | Var | Used for |
@@ -93,19 +118,19 @@ vector-dimension assumption it makes.
 | `VOYAGE_API_KEY` | Embedding the question before retrieval |
 | `ANTHROPIC_API_KEY` | Composing the answer from retrieved context |
 | `ALINA_MODEL` | Optional override for the answer model (default `claude-sonnet-5`) |
+| `GITHUB_APP_ID` / `GITHUB_APP_PRIVATE_KEY` / `GITHUB_INSTALLATION_ID` | `scripts/ingest-github.mjs`'s GitHub App auth |
 
 ## Next up
 
-- Run the embeddings backfill (above), then verify a real Ask query in
-  each of Tech/Social/Support actually returns matches.
+- Add `tech.github_docs` to `match_knowledge`'s union (see **GitHub
+  ingestion** above), then run the embeddings backfill and the GitHub
+  ingestion script, and verify a real Ask query in each of
+  Tech/Social/Support actually returns matches.
 - Wire Sources' "Connect" buttons to real OAuth flows and flip `connected`
   in `lib/connectors.ts` to read live state instead of a hardcoded `false`.
-  GitHub specifically needs a GitHub App created in the org (admin-only
-  step) plus a `connections` table and an ingestion job that pulls
-  READMEs / ADRs / merged PR descriptions into `tech.notes` (or a similar
-  table) with embeddings, so Tech Ask can answer from them — nothing
-  currently ingests GitHub content into the knowledge base.
 - Build Routing's rule editor and Team's invite/permission editing.
 - Admin UI for editing `workspace_prompts` (today it's DB-only).
 - A trigger/webhook that embeds a row on insert, so new content doesn't
-  need the backfill script re-run to become searchable.
+  need the backfill script re-run to become searchable, and a scheduled
+  re-run of the GitHub ingestion so new READMEs/ADRs/merged PRs keep
+  showing up without a manual trigger.

@@ -11,6 +11,7 @@ const ANSWER_MODEL = process.env.ALINA_MODEL || "claude-sonnet-5";
 export const SOURCE_LABELS: Record<string, string> = {
   "tech.notes": "Tech note",
   "tech.meeting_notes": "Meeting notes",
+  "tech.github_docs": "GitHub doc",
   "social.recordings": "Recording",
   "social.testimonials": "Testimonial",
   "social.content_prompts": "Content prompt",
