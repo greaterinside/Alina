@@ -1,26 +1,36 @@
-"use client";
-
-import { useEffect, useState } from "react";
 import clsx from "clsx";
 
 export type MascotState = "idle" | "thinking" | "speaking" | "happy";
 
 const SIZES = { sm: 40, md: 64, lg: 112, xl: 172 } as const;
 
-// Cache asset availability across instances/renders so we only probe once
-// per state per session instead of re-checking every time a Mascot mounts.
-const assetAvailability = new Map<MascotState, boolean>();
+/**
+ * Which /public/mascot/{state}.png files actually exist right now. Kept
+ * as a static manifest (instead of probing for the file at runtime) so
+ * there's no async gap where a placeholder flashes before the real art
+ * loads — the correct source is known synchronously, even during SSR.
+ *
+ * Update this after adding a new file to public/mascot/.
+ */
+const AVAILABLE: Record<MascotState, boolean> = {
+  idle: true,
+  thinking: false,
+  speaking: false,
+  happy: false,
+};
+
+function resolveState(state: MascotState): MascotState | null {
+  if (AVAILABLE[state]) return state;
+  if (AVAILABLE.idle) return "idle";
+  return null;
+}
 
 /**
- * Alina's mascot. Tries the real illustrated PNGs first
- * (/public/mascot/{state}.png — drop the 4 exported frames in there),
- * and falls back to an original inline SVG face so the Ask screen has a
- * real presence even before those assets exist.
- *
- * The check happens via an off-DOM Image() probe rather than an <img
- * onError>, because a server-rendered <img> starts fetching before React
- * hydrates and attaches the error handler — the native error can fire (and
- * be lost) before onError exists, leaving a broken-image icon on screen.
+ * Alina's mascot. Renders the real illustrated PNG for the requested
+ * state when one exists; otherwise the real idle illustration (the
+ * actual character, just not mid-expression) rather than an invented
+ * placeholder. Only draws the inline SVG face below if no real artwork
+ * exists at all yet.
  */
 export function Mascot({
   state = "idle",
@@ -31,32 +41,8 @@ export function Mascot({
   size?: keyof typeof SIZES;
   className?: string;
 }) {
-  const [available, setAvailable] = useState(() => assetAvailability.get(state) ?? null);
   const px = SIZES[size];
-
-  useEffect(() => {
-    const cached = assetAvailability.get(state);
-    if (cached !== undefined) {
-      setAvailable(cached);
-      return;
-    }
-    let cancelled = false;
-    const probe = new Image();
-    probe.onload = () => {
-      if (cancelled) return;
-      assetAvailability.set(state, true);
-      setAvailable(true);
-    };
-    probe.onerror = () => {
-      if (cancelled) return;
-      assetAvailability.set(state, false);
-      setAvailable(false);
-    };
-    probe.src = `/mascot/${state}.png`;
-    return () => {
-      cancelled = true;
-    };
-  }, [state]);
+  const resolvedState = resolveState(state);
 
   return (
     <div
@@ -68,10 +54,10 @@ export function Mascot({
       style={{ width: px, height: px }}
       aria-hidden
     >
-      {available ? (
+      {resolvedState ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={`/mascot/${state}.png`}
+          src={`/mascot/${resolvedState}.png`}
           alt=""
           width={px}
           height={px}

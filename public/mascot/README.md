@@ -10,10 +10,16 @@ Still needed, same filenames:
 - `speaking.png`
 - `happy.png`
 
-`components/mascot/Mascot.tsx` requests `/mascot/{state}.png` and falls
-back to a built-in illustrated SVG face for any state whose file is
-missing, so the app works today — but the real illustrations should
-replace the fallback for the actual "Jarvis" feel the founder described.
+`components/mascot/Mascot.tsx` renders `/mascot/{state}.png` for a state
+whose file exists (tracked in that file's `AVAILABLE` manifest — a static
+map, not a runtime file check, so there's no async loading flash), falls
+back to the real `idle.png` for a state that isn't ready yet, and only
+draws the built-in illustrated SVG face if no real art exists at all.
+
+**When you add `thinking.png`, `speaking.png`, or `happy.png` here, also
+flip that entry to `true` in `AVAILABLE` in `components/mascot/Mascot.tsx`**
+— otherwise the new file sits unused and Mascot keeps showing `idle.png`
+for that state.
 
 Note for whoever adds the remaining three: send them as actual file
 attachments/uploads, not pasted inline into chat — pasted images aren't
