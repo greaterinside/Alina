@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 /**
- * Pulls README files, architecture-decision docs, and merged-PR
- * descriptions from every repo the Greater Inside GitHub App is installed
- * on, embeds them with Voyage AI, and upserts them into tech.github_docs
- * so match_knowledge can search them from the Tech workspace.
+ * Pulls README files, architecture-decision docs, a bounded sample of
+ * source files, and merged-PR descriptions from every repo the Greater
+ * Inside GitHub App is installed on, embeds them with Voyage AI, and
+ * upserts them into tech.github_docs so match_knowledge can search them
+ * from the Tech workspace. Needs supabase/migrations/0003_github_code_files.sql
+ * applied first — it adds the 'code_file' doc_type this script writes.
  *
  * Run:
  *   node scripts/ingest-github.mjs
@@ -43,6 +45,18 @@ const RAW_PRIVATE_KEY = process.env.GITHUB_APP_PRIVATE_KEY;
 const VOYAGE_MODEL = "voyage-3";
 const MAX_INPUT_CHARS = 8000;
 const MAX_PRS_PER_REPO = 50;
+
+// Source-code ingestion is intentionally capped: without a Voyage payment
+// method, the free tier throttles hard (3 requests/min, 10K tokens/min —
+// see the script's own retry loop advice), and a single repo's docs are
+// embedded in one batched call. Pulling every file in every repo would
+// blow that budget instantly, so this covers a bounded sample per repo,
+// not the whole codebase.
+const CODE_EXTENSIONS = /\.(ts|tsx|js|jsx|mjs|cjs|py|go|rb|java|php|rs|c|cpp|h|hpp|cs|sql)$/i;
+const CODE_EXCLUDE_PATH = /(^|\/)(node_modules|dist|build|vendor|\.next|\.git)\//i;
+const MAX_CODE_FILES_PER_REPO = 8;
+const MAX_CODE_FILE_CHARS = 100_000; // skip generated/vendored files far past what a hand-written source file looks like
+const CODE_CHUNK_CHARS = 3000;
 
 const missing = [
   ["NEXT_PUBLIC_SUPABASE_URL", SUPABASE_URL],
@@ -132,14 +146,17 @@ async function fetchReadme(token, owner, repo) {
   }
 }
 
-async function fetchAdrDocs(token, owner, repo, defaultBranch) {
-  let tree;
+async function fetchRepoTree(token, owner, repo, defaultBranch) {
   try {
-    tree = await gh(`/repos/${owner}/${repo}/git/trees/${defaultBranch}?recursive=1`, token);
+    const tree = await gh(`/repos/${owner}/${repo}/git/trees/${defaultBranch}?recursive=1`, token);
+    return tree.tree ?? [];
   } catch {
     return [];
   }
-  const candidates = (tree.tree ?? []).filter(
+}
+
+async function fetchAdrDocs(token, owner, repo, tree) {
+  const candidates = tree.filter(
     (entry) => entry.type === "blob" && /\.(md|mdx)$/i.test(entry.path) && /adr|architecture.?decision/i.test(entry.path)
   );
 
@@ -153,6 +170,43 @@ async function fetchAdrDocs(token, owner, repo, defaultBranch) {
         title: entry.path.split("/").pop(),
         content: Buffer.from(data.content, "base64").toString("utf8"),
         source_url: data.html_url,
+      });
+    } catch (err) {
+      console.error(`    ${entry.path}: fetch failed — ${err.message}`);
+    }
+  }
+  return docs;
+}
+
+async function fetchSourceFiles(token, owner, repo, tree) {
+  const candidates = tree
+    .filter(
+      (entry) =>
+        entry.type === "blob" &&
+        CODE_EXTENSIONS.test(entry.path) &&
+        !CODE_EXCLUDE_PATH.test(entry.path) &&
+        (entry.size ?? 0) > 0 &&
+        (entry.size ?? 0) <= MAX_CODE_FILE_CHARS
+    )
+    .slice(0, MAX_CODE_FILES_PER_REPO);
+
+  const docs = [];
+  for (const entry of candidates) {
+    try {
+      const data = await gh(`/repos/${owner}/${repo}/contents/${entry.path}`, token);
+      const content = Buffer.from(data.content, "base64").toString("utf8");
+      const chunks = [];
+      for (let i = 0; i < content.length; i += CODE_CHUNK_CHARS) {
+        chunks.push(content.slice(i, i + CODE_CHUNK_CHARS));
+      }
+      chunks.forEach((chunk, i) => {
+        docs.push({
+          doc_type: "code_file",
+          path: chunks.length > 1 ? `${entry.path}#chunk${i}` : entry.path,
+          title: entry.path.split("/").pop(),
+          content: chunk,
+          source_url: data.html_url,
+        });
       });
     } catch (err) {
       console.error(`    ${entry.path}: fetch failed — ${err.message}`);
@@ -190,9 +244,12 @@ async function ingestRepo(token, repo) {
   const [owner, name] = repo.full_name.split("/");
   console.log(`${repo.full_name}`);
 
+  const tree = await fetchRepoTree(token, owner, name, repo.default_branch);
+
   const docs = [
     await fetchReadme(token, owner, name),
-    ...(await fetchAdrDocs(token, owner, name, repo.default_branch)),
+    ...(await fetchAdrDocs(token, owner, name, tree)),
+    ...(await fetchSourceFiles(token, owner, name, tree)),
     ...(await fetchMergedPRs(token, owner, name)),
   ].filter(Boolean);
 
