@@ -3,16 +3,34 @@ import type { WorkspaceId } from "@/lib/types";
 const VOYAGE_MODEL = "voyage-3";
 const ANSWER_MODEL = process.env.ALINA_MODEL || "claude-sonnet-5";
 
+/**
+ * Human-readable labels for match_knowledge's `source_table` values. Keep
+ * this in sync with scripts/backfill-embeddings.mjs's SOURCES list — both
+ * enumerate the same six tables.
+ */
+export const SOURCE_LABELS: Record<string, string> = {
+  "tech.notes": "Tech note",
+  "tech.meeting_notes": "Meeting notes",
+  "social.recordings": "Recording",
+  "social.testimonials": "Testimonial",
+  "social.content_prompts": "Content prompt",
+  "support.tickets": "Support ticket",
+};
+
+/** Row shape returned by the real public.match_knowledge Postgres function. */
 export interface KnowledgeMatch {
-  id: string;
-  content: string;
-  source: string;
-  title: string;
-  meta: string;
+  source_table: string;
+  source_id: string;
+  content_snippet: string;
   similarity: number;
 }
 
-/** Embeds a query with Voyage AI — the same embedding model match_knowledge was built against. */
+/**
+ * Embeds a query with Voyage AI. Uses input_type "query" — match_knowledge's
+ * stored rows are embedded with input_type "document" (see the backfill
+ * script), which is Voyage's recommended asymmetric setup for retrieval and
+ * measurably improves match quality over embedding both sides the same way.
+ */
 export async function embedQuery(text: string): Promise<number[]> {
   const apiKey = process.env.VOYAGE_API_KEY;
   if (!apiKey) throw new Error("VOYAGE_API_KEY is not configured");
@@ -32,10 +50,11 @@ export async function embedQuery(text: string): Promise<number[]> {
 }
 
 /**
- * Calls the existing `match_knowledge` Postgres function via RPC.
- * Expected signature: match_knowledge(query_embedding vector, workspace text, match_count int)
- * returning rows shaped like KnowledgeMatch. Adjust the RPC name/args here
- * if the live function's signature differs.
+ * Calls the real public.match_knowledge(query_embedding, match_count,
+ * workspace_filter) — returns RETURNS TABLE(source_table, source_id,
+ * content_snippet, similarity). workspace_filter is 'tech' | 'social' |
+ * 'support' | null; Assistant (cross-cutting) passes null to search
+ * everything, matching the function's own "no filter" behavior.
  */
 export async function matchKnowledge(
   supabase: any,
@@ -45,8 +64,8 @@ export async function matchKnowledge(
 ): Promise<KnowledgeMatch[]> {
   const { data, error } = await supabase.rpc("match_knowledge", {
     query_embedding: embedding,
-    workspace: workspace === "assistant" ? null : workspace,
     match_count: matchCount,
+    workspace_filter: workspace === "assistant" ? null : workspace,
   });
   if (error) throw error;
   return data ?? [];
@@ -79,7 +98,7 @@ export function buildSystemPrompt(opts: {
   const lines = [
     `You are Alina, the internal knowledge assistant for Greater Inside, answering inside the ${opts.workspaceLabel} workspace.`,
     "Answer only from the provided context. If the context doesn't cover it, say so plainly instead of guessing.",
-    "Cite the source of each claim inline using [cite:Short Title] right after the sentence it supports.",
+    "Cite the source of each claim inline using [cite:Short Label] right after the sentence it supports — use the label given for that context item, e.g. [cite:Tech note].",
     "Be warm, direct, and useful — never corporate or vague.",
   ];
   if (opts.masterTone) {
@@ -101,7 +120,7 @@ export async function composeAnswer(opts: {
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not configured");
 
   const contextBlock = opts.context
-    .map((c, i) => `[${i + 1}] (${c.source} — ${c.title})\n${c.content}`)
+    .map((c, i) => `[${i + 1}] (${SOURCE_LABELS[c.source_table] ?? c.source_table})\n${c.content_snippet}`)
     .join("\n\n");
 
   const res = await fetch("https://api.anthropic.com/v1/messages", {

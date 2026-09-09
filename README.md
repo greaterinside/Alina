@@ -7,13 +7,13 @@ TypeScript + Tailwind, on top of the shared Supabase project.
 
 This branch was started against an **empty repository** — no prior Next.js
 app, API routes, or Supabase migrations existed in `greaterinside/alina` to
-build on. So instead of only adding UI on top of working `app/api/projects`,
-`app/api/recordings/ingest`, and `match_knowledge` routes as planned, this
-scaffold defines the contract those pieces need to satisfy (see
-`lib/rag.ts` and `app/api/ask/route.ts`) and wires the frontend to call it.
-Point `NEXT_PUBLIC_SUPABASE_URL` / keys at the real project and the same
-code path starts answering from live data — nothing here needs rewriting,
-just wiring.
+build on. `app/api/projects` and `app/api/recordings/ingest` still don't
+exist here and aren't used by anything in this branch. `match_knowledge`
+does exist in the live Supabase project, and `/api/ask` (via `lib/rag.ts`)
+now calls its real signature —
+`match_knowledge(query_embedding, match_count, workspace_filter)` — rather
+than a guess. It just has no data to find yet: see **Embeddings backfill**
+below.
 
 Built so far:
 
@@ -64,6 +64,26 @@ Without the env vars set, the app still runs: the sidebar defaults to a
 demo admin identity (so every screen is reachable) and `/api/ask` returns
 a plain "I'm not connected yet" message instead of inventing an answer.
 
+## Embeddings backfill
+
+`match_knowledge` reads `embedding` columns on six tables — `tech.notes`,
+`tech.meeting_notes`, `social.recordings`, `social.testimonials`,
+`social.content_prompts`, `support.tickets` — and only ever matches rows
+where that column is set. Until it's backfilled, every query will come
+back empty even with everything else wired up correctly.
+
+```bash
+node scripts/backfill-embeddings.mjs
+```
+
+Idempotent (only touches rows where `embedding is null`), so it's safe to
+re-run after new rows land — though a live webhook/trigger that embeds a
+row the moment it's written would make this unnecessary going forward;
+this script is the one-time catch-up for what already exists. Needs
+`SUPABASE_SERVICE_ROLE_KEY` and `VOYAGE_API_KEY` (reads `.env.local` if
+present). See the script's own header comment for the Voyage model /
+vector-dimension assumption it makes.
+
 ## Env vars
 
 | Var | Used for |
@@ -76,9 +96,16 @@ a plain "I'm not connected yet" message instead of inventing an answer.
 
 ## Next up
 
+- Run the embeddings backfill (above), then verify a real Ask query in
+  each of Tech/Social/Support actually returns matches.
 - Wire Sources' "Connect" buttons to real OAuth flows and flip `connected`
   in `lib/connectors.ts` to read live state instead of a hardcoded `false`.
+  GitHub specifically needs a GitHub App created in the org (admin-only
+  step) plus a `connections` table and an ingestion job that pulls
+  READMEs / ADRs / merged PR descriptions into `tech.notes` (or a similar
+  table) with embeddings, so Tech Ask can answer from them — nothing
+  currently ingests GitHub content into the knowledge base.
 - Build Routing's rule editor and Team's invite/permission editing.
 - Admin UI for editing `workspace_prompts` (today it's DB-only).
-- Confirm `match_knowledge`'s real RPC signature in the live project and
-  adjust `lib/rag.ts#matchKnowledge` if it differs from the guess here.
+- A trigger/webhook that embeds a row on insert, so new content doesn't
+  need the backfill script re-run to become searchable.

@@ -8,6 +8,7 @@ import {
   getUserPersonalization,
   getWorkspaceTone,
   matchKnowledge,
+  SOURCE_LABELS,
 } from "@/lib/rag";
 import { WORKSPACES, type WorkspaceId } from "@/lib/types";
 
@@ -74,9 +75,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       content,
       provenance: matches.slice(0, 4).map((m) => ({
-        source: m.source,
-        title: m.title,
-        meta: m.meta,
+        source: SOURCE_LABELS[m.source_table] ?? m.source_table,
+        title: m.content_snippet.length > 80 ? m.content_snippet.slice(0, 77) + "…" : m.content_snippet,
+        meta: `${Math.round(m.similarity * 100)}% match`,
       })),
     });
   } catch (err) {
