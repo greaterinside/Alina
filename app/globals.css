@@ -1,0 +1,48 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body {
+    height: 100%;
+  }
+  body {
+    @apply bg-offwhite text-charcoal antialiased;
+  }
+  ::selection {
+    @apply bg-pink text-navy;
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #11325b33 transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: #11325b33;
+    border-radius: 999px;
+  }
+}
+
+@layer components {
+  .btn-cta {
+    @apply inline-flex items-center justify-center gap-2 rounded-2xl bg-terracotta px-5 py-3
+      font-semibold text-white shadow-chunky transition-all duration-150
+      hover:brightness-105 active:translate-y-[3px] active:shadow-none
+      disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-2xl border-2 border-navy/15 bg-white
+      px-5 py-3 font-semibold text-navy transition-all duration-150
+      hover:border-navy/30 hover:bg-navy/[0.03] active:translate-y-[2px];
+  }
+  .pill-tag {
+    @apply inline-flex items-center rounded-full bg-pink px-3 py-1 text-xs font-medium text-navy;
+  }
+  .card-chunky {
+    @apply rounded-3xl border-2 border-navy/10 bg-white shadow-card;
+  }
+}
