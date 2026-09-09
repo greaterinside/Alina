@@ -64,6 +64,24 @@ const config: Config = {
           "0%": { opacity: "0", transform: "translateY(6px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
         },
+        "mascot-think": {
+          "0%,100%": { transform: "rotate(-3deg) translateY(0px)" },
+          "50%": { transform: "rotate(3deg) translateY(-2px)" },
+        },
+        "mascot-talk": {
+          "0%,100%": { transform: "scale(1)" },
+          "50%": { transform: "scale(1.035)" },
+        },
+        "dot-bounce": {
+          "0%,80%,100%": { transform: "translateY(0)", opacity: "0.5" },
+          "40%": { transform: "translateY(-3px)", opacity: "1" },
+        },
+        "sparkle-pop": {
+          "0%": { transform: "scale(0) rotate(-15deg)", opacity: "0" },
+          "40%": { transform: "scale(1.15) rotate(8deg)", opacity: "1" },
+          "70%": { transform: "scale(0.95) rotate(-4deg)" },
+          "100%": { transform: "scale(1) rotate(0deg)", opacity: "1" },
+        },
       },
       animation: {
         "bounce-in": "bounce-in 0.35s cubic-bezier(.2,.8,.3,1.4) both",
@@ -73,6 +91,10 @@ const config: Config = {
         blink: "blink 1.4s ease-in-out infinite",
         "write-reveal": "write-reveal 1.1s cubic-bezier(.65,0,.35,1) both",
         "fade-up": "fade-up 0.5s ease both",
+        "mascot-think": "mascot-think 1.8s ease-in-out infinite",
+        "mascot-talk": "mascot-talk 0.5s ease-in-out infinite",
+        "dot-bounce": "dot-bounce 1.1s ease-in-out infinite",
+        "sparkle-pop": "sparkle-pop 0.6s cubic-bezier(.25,1,.4,1.4) both",
       },
     },
   },

@@ -25,6 +25,16 @@ function resolveState(state: MascotState): MascotState | null {
   return null;
 }
 
+// Until each state has its own illustration, the single real photo still
+// needs to *read* as thinking/speaking/happy — done with motion and small
+// accessory badges layered on top, rather than a different drawn face.
+const STATE_MOTION: Record<MascotState, string> = {
+  idle: "animate-float-y",
+  thinking: "animate-mascot-think",
+  speaking: "animate-mascot-talk",
+  happy: "animate-bounce-in",
+};
+
 /**
  * Alina's mascot. Renders the real illustrated PNG for the requested
  * state when one exists; otherwise the real idle illustration (the
@@ -46,28 +56,51 @@ export function Mascot({
 
   return (
     <div
-      className={clsx(
-        "relative flex-none",
-        state === "idle" && "animate-float-y",
-        className
-      )}
+      className={clsx("relative flex-none", className)}
       style={{ width: px, height: px }}
       aria-hidden
     >
-      {resolvedState ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={`/mascot/${resolvedState}.png`}
-          alt=""
-          width={px}
-          height={px}
-          className="h-full w-full select-none object-contain"
-          draggable={false}
-        />
-      ) : (
-        <MascotFallback state={state} px={px} />
-      )}
+      <div className={clsx("h-full w-full", STATE_MOTION[state])}>
+        {resolvedState ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={`/mascot/${resolvedState}.png`}
+            alt=""
+            width={px}
+            height={px}
+            className="h-full w-full select-none object-contain"
+            draggable={false}
+          />
+        ) : (
+          <MascotFallback state={state} px={px} />
+        )}
+      </div>
+
+      {state === "thinking" && <ThinkDots />}
+      {state === "happy" && <SparkleBadge />}
     </div>
+  );
+}
+
+function ThinkDots() {
+  return (
+    <div className="absolute -right-1 -top-1 flex items-end gap-[3px] rounded-full bg-white px-1.5 py-1 shadow-soft">
+      <span className="h-1.5 w-1.5 animate-dot-bounce rounded-full bg-navy/50 [animation-delay:-0.3s]" />
+      <span className="h-1.5 w-1.5 animate-dot-bounce rounded-full bg-navy/50 [animation-delay:-0.15s]" />
+      <span className="h-1.5 w-1.5 animate-dot-bounce rounded-full bg-navy/50" />
+    </div>
+  );
+}
+
+function SparkleBadge() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="absolute -right-1.5 -top-1.5 h-5 w-5 animate-sparkle-pop text-plum drop-shadow-sm"
+      fill="currentColor"
+    >
+      <path d="M12 1l2.2 5.6L20 9l-5.8 1.4L12 16l-2.2-5.6L4 9l5.8-1.4z" />
+    </svg>
   );
 }
 
