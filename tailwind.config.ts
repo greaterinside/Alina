@@ -17,6 +17,7 @@ const config: Config = {
       },
       fontFamily: {
         sans: ["var(--font-poppins)", "ui-sans-serif", "system-ui", "sans-serif"],
+        hand: ["var(--font-hand)", "cursive"],
       },
       borderRadius: {
         xl: "1.25rem",
@@ -25,10 +26,13 @@ const config: Config = {
         blob: "2rem",
       },
       boxShadow: {
-        chunky: "0 4px 0 0 rgba(17, 50, 91, 0.18)",
-        "chunky-sm": "0 3px 0 0 rgba(17, 50, 91, 0.16)",
-        card: "0 2px 10px rgba(17, 50, 91, 0.08)",
-        pop: "0 10px 30px rgba(17, 50, 91, 0.14)",
+        // Soft, diffuse elevation — no hard offset. Depth reads through
+        // blur/spread, not a cartoon drop-shadow.
+        xs: "0 1px 2px rgba(17, 50, 91, 0.05)",
+        soft: "0 1px 2px rgba(17, 50, 91, 0.04), 0 6px 20px -6px rgba(17, 50, 91, 0.10)",
+        card: "0 1px 2px rgba(17, 50, 91, 0.04), 0 10px 28px -10px rgba(17, 50, 91, 0.14)",
+        pop: "0 24px 64px -16px rgba(17, 50, 91, 0.28)",
+        cta: "0 10px 24px -8px rgba(200, 101, 61, 0.45)",
       },
       keyframes: {
         "bounce-in": {
@@ -52,6 +56,14 @@ const config: Config = {
           "0%,100%": { opacity: "1" },
           "50%": { opacity: "0.3" },
         },
+        "write-reveal": {
+          "0%": { clipPath: "inset(0 100% 0 0)" },
+          "100%": { clipPath: "inset(0 0% 0 0)" },
+        },
+        "fade-up": {
+          "0%": { opacity: "0", transform: "translateY(6px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
+        },
       },
       animation: {
         "bounce-in": "bounce-in 0.35s cubic-bezier(.2,.8,.3,1.4) both",
@@ -59,6 +71,8 @@ const config: Config = {
         wiggle: "wiggle 0.6s ease-in-out",
         "pulse-ring": "pulse-ring 1.4s cubic-bezier(0,0,0.2,1) infinite",
         blink: "blink 1.4s ease-in-out infinite",
+        "write-reveal": "write-reveal 1.1s cubic-bezier(.65,0,.35,1) both",
+        "fade-up": "fade-up 0.5s ease both",
       },
     },
   },

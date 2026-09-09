@@ -132,7 +132,7 @@ export function AskScreen({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex flex-none flex-wrap items-center gap-3 border-b-2 border-navy/6 px-6 py-4">
+      <div className="flex flex-none flex-wrap items-center gap-3 border-b border-navy/8 px-6 py-4">
         <WorkspaceTabs allowed={allowedWorkspaces} active={workspace} onChange={setWorkspace} />
         <span className="pill-tag hidden sm:inline-flex">Tone: {WORKSPACES[workspace].toneHint}</span>
         <div className="ml-auto flex items-center gap-2">
@@ -141,7 +141,7 @@ export function AskScreen({
               onClick={() => setAutoSpeak((v) => !v)}
               title={autoSpeak ? "Alina will read answers out loud" : "Turn on voice replies"}
               className={clsx(
-                "grid h-9 w-9 place-items-center rounded-2xl border-2 transition-colors",
+                "grid h-9 w-9 place-items-center rounded-2xl border transition-colors",
                 autoSpeak
                   ? "border-terracotta/40 bg-terracotta/10 text-terracotta"
                   : "border-navy/10 text-navy/50 hover:text-navy"
@@ -232,7 +232,7 @@ function ThinkingBubble() {
   return (
     <div className="flex items-start gap-3">
       <Mascot state="thinking" size="sm" />
-      <div className="flex items-center gap-1 rounded-3xl rounded-tl-lg border-2 border-navy/8 bg-white px-4 py-3.5 shadow-card">
+      <div className="flex items-center gap-1 rounded-3xl rounded-tl-lg border border-navy/[0.07] bg-white px-4 py-3.5 shadow-card">
         <span className="h-1.5 w-1.5 animate-blink rounded-full bg-navy/40 [animation-delay:0ms]" />
         <span className="h-1.5 w-1.5 animate-blink rounded-full bg-navy/40 [animation-delay:150ms]" />
         <span className="h-1.5 w-1.5 animate-blink rounded-full bg-navy/40 [animation-delay:300ms]" />

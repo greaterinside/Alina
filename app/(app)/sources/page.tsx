@@ -1,7 +1,7 @@
-import { PlugZap } from "lucide-react";
 import { requireAdminIdentity } from "@/lib/admin-gate";
 import { getConnectors } from "@/lib/connectors";
 import { PageHeader } from "@/components/admin/PageHeader";
+import { BrandIcon } from "@/components/icons/brand-icons";
 
 export default async function SourcesPage() {
   await requireAdminIdentity();
@@ -18,26 +18,26 @@ export default async function SourcesPage() {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {connectors.map((c) => (
             <div key={c.id} className="card-chunky flex flex-col gap-3 p-4">
-              <div className="flex items-center gap-2.5">
-                <span className="grid h-9 w-9 flex-none place-items-center rounded-xl bg-navy/8 text-navy">
-                  <PlugZap size={16} />
+              <div className="flex items-center gap-3">
+                <span className="grid h-10 w-10 flex-none place-items-center rounded-xl border border-navy/8 bg-white shadow-xs">
+                  <BrandIcon name={c.id} size={19} />
                 </span>
                 <p className="text-[14px] font-semibold text-navy">{c.name}</p>
               </div>
-              <p className="min-h-[40px] text-[12.5px] leading-relaxed text-charcoal/60">
+              <p className="min-h-[40px] text-[12.5px] leading-relaxed text-charcoal/55">
                 {c.description}
               </p>
               <button
                 disabled
                 title="Connector setup is next up — not wired to a real OAuth flow yet"
-                className="btn-ghost mt-auto w-full cursor-not-allowed py-2 text-[12.5px] opacity-60"
+                className="btn-ghost mt-auto w-full cursor-not-allowed py-2 text-[12.5px] opacity-50"
               >
                 Connect {c.name}
               </button>
             </div>
           ))}
         </div>
-        <p className="mt-6 max-w-xl text-[12.5px] text-charcoal/45">
+        <p className="mt-6 max-w-xl text-[12.5px] text-charcoal/40">
           This screen is scaffolded and ready — the next phase wires each card to a real OAuth
           connection and shows genuinely "Connected" once a token exists, never before.
         </p>

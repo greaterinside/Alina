@@ -51,14 +51,14 @@ export function TypingAnswer({
       <div className="mt-4 flex gap-2">
         <button
           onClick={copy}
-          className="inline-flex items-center gap-1.5 rounded-xl border-2 border-navy/10 px-3 py-1.5 text-[12.5px] font-semibold text-navy/70 transition-colors hover:border-navy/25 hover:text-navy"
+          className="inline-flex items-center gap-1.5 rounded-xl border border-navy/10 px-3 py-1.5 text-[12.5px] font-semibold text-navy/70 transition-colors hover:border-navy/25 hover:text-navy"
         >
           {copied ? <Check size={13} /> : <Copy size={13} />}
           {copied ? "Copied" : "Copy"}
         </button>
         <button
           onClick={onRegenerate}
-          className="inline-flex items-center gap-1.5 rounded-xl border-2 border-navy/10 px-3 py-1.5 text-[12.5px] font-semibold text-navy/70 transition-colors hover:border-navy/25 hover:text-navy"
+          className="inline-flex items-center gap-1.5 rounded-xl border border-navy/10 px-3 py-1.5 text-[12.5px] font-semibold text-navy/70 transition-colors hover:border-navy/25 hover:text-navy"
         >
           <RotateCcw size={13} />
           Try again

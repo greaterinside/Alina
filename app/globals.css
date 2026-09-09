@@ -30,19 +30,19 @@
 @layer components {
   .btn-cta {
     @apply inline-flex items-center justify-center gap-2 rounded-2xl bg-terracotta px-5 py-3
-      font-semibold text-white shadow-chunky transition-all duration-150
-      hover:brightness-105 active:translate-y-[3px] active:shadow-none
-      disabled:opacity-50 disabled:pointer-events-none;
+      font-semibold text-white shadow-cta transition-all duration-150
+      hover:brightness-[1.07] hover:shadow-lg active:scale-[0.97]
+      disabled:opacity-40 disabled:pointer-events-none disabled:shadow-none;
   }
   .btn-ghost {
-    @apply inline-flex items-center justify-center gap-2 rounded-2xl border-2 border-navy/15 bg-white
+    @apply inline-flex items-center justify-center gap-2 rounded-2xl border border-navy/10 bg-white
       px-5 py-3 font-semibold text-navy transition-all duration-150
-      hover:border-navy/30 hover:bg-navy/[0.03] active:translate-y-[2px];
+      hover:border-navy/25 hover:bg-navy/5 active:scale-[0.98];
   }
   .pill-tag {
     @apply inline-flex items-center rounded-full bg-pink px-3 py-1 text-xs font-medium text-navy;
   }
   .card-chunky {
-    @apply rounded-3xl border-2 border-navy/10 bg-white shadow-card;
+    @apply rounded-3xl border border-navy/5 bg-white shadow-card;
   }
 }

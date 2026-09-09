@@ -17,7 +17,7 @@ export function ModeToggle({
   onChange: (mode: AskMode) => void;
 }) {
   return (
-    <div className="flex flex-none items-center gap-0.5 rounded-full border-2 border-navy/10 bg-white p-1">
+    <div className="flex flex-none items-center gap-0.5 rounded-full border border-navy/10 bg-white p-1">
       {OPTIONS.map(({ id, label, icon: Icon }) => {
         const isActive = mode === id;
         return (

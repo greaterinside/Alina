@@ -27,13 +27,13 @@ export function Sidebar({ identity }: { identity: Identity }) {
 
   return (
     <aside className="flex h-screen w-[248px] flex-none flex-col bg-navy text-white/90">
-      <div className="flex items-center gap-2.5 px-5 pb-4 pt-6">
-        <span className="grid h-9 w-9 flex-none place-items-center rounded-2xl bg-terracotta shadow-chunky-sm">
-          <Sparkles size={18} className="text-white" />
+      <div className="flex items-center gap-2.5 px-5 pb-5 pt-6">
+        <span className="grid h-9 w-9 flex-none place-items-center rounded-2xl bg-terracotta shadow-soft">
+          <Sparkles size={17} className="text-white" strokeWidth={2.25} />
         </span>
         <div className="leading-tight">
-          <p className="text-[15px] font-bold tracking-tight text-white">Alina</p>
-          <p className="text-[11px] text-white/55">Greater Inside</p>
+          <p className="text-[15.5px] font-bold tracking-tight text-white">Alina</p>
+          <p className="text-[11px] font-medium tracking-wide text-white/45">Greater Inside</p>
         </div>
       </div>
 
@@ -51,8 +51,8 @@ export function Sidebar({ identity }: { identity: Identity }) {
                   className={clsx(
                     "group flex items-center gap-2.5 rounded-2xl px-3 py-2.5 text-[13.5px] font-medium transition-all duration-150",
                     active
-                      ? "bg-white text-navy shadow-chunky-sm"
-                      : "text-white/70 hover:bg-white/10 hover:text-white"
+                      ? "bg-white text-navy shadow-soft"
+                      : "text-white/65 hover:bg-white/[0.08] hover:text-white"
                   )}
                 >
                   <Icon

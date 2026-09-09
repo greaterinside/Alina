@@ -14,7 +14,7 @@ export function MessageBubble({
   if (message.role === "user") {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[75%] rounded-3xl rounded-br-lg bg-navy px-4 py-3 text-[14.5px] leading-relaxed text-white shadow-chunky-sm">
+        <div className="max-w-[75%] rounded-3xl rounded-br-lg bg-navy px-4 py-3 text-[14.5px] leading-relaxed text-white shadow-soft">
           {message.content}
         </div>
       </div>
@@ -24,7 +24,7 @@ export function MessageBubble({
   return (
     <div className="flex items-start gap-3">
       <Mascot state="happy" size="sm" className="mt-0.5" />
-      <div className="min-w-0 max-w-[80%] rounded-3xl rounded-tl-lg border-2 border-navy/8 bg-white px-4 py-3.5 shadow-card">
+      <div className="min-w-0 max-w-[80%] rounded-3xl rounded-tl-lg border border-navy/[0.07] bg-white px-4 py-3.5 shadow-card">
         <p className="whitespace-pre-wrap text-[14.5px] leading-relaxed text-charcoal">
           {renderWithCitations(message.content)}
         </p>

@@ -35,7 +35,7 @@ export function Composer({
   }
 
   return (
-    <div className="flex items-end gap-2 rounded-3xl border-2 border-navy/10 bg-white p-2 pl-4 shadow-card focus-within:border-terracotta/50">
+    <div className="flex items-end gap-2 rounded-3xl border border-navy/10 bg-white p-2 pl-4 shadow-card transition-colors focus-within:border-terracotta/40">
       <textarea
         ref={textareaRef}
         value={value}
@@ -52,10 +52,10 @@ export function Composer({
           disabled={!micSupported}
           title={micSupported ? "Talk to Alina" : "Voice input isn't supported in this browser"}
           className={clsx(
-            "grid h-10 w-10 flex-none place-items-center rounded-2xl border-2 transition-all duration-150 active:scale-95 disabled:opacity-30",
+            "grid h-10 w-10 flex-none place-items-center rounded-2xl border transition-all duration-150 active:scale-95 disabled:opacity-30",
             micListening
               ? "border-terracotta bg-terracotta/10 text-terracotta animate-pulse-ring"
-              : "border-navy/12 text-navy/60 hover:border-navy/25 hover:text-navy"
+              : "border-navy/12 text-navy/55 hover:border-navy/25 hover:text-navy"
           )}
         >
           <Mic size={17} />
@@ -65,7 +65,7 @@ export function Composer({
       <button
         onClick={onSubmit}
         disabled={disabled || !value.trim()}
-        className="grid h-10 w-10 flex-none place-items-center rounded-2xl bg-terracotta text-white shadow-chunky-sm transition-all duration-150 hover:brightness-105 active:translate-y-[2px] active:shadow-none disabled:opacity-30 disabled:shadow-none"
+        className="grid h-10 w-10 flex-none place-items-center rounded-2xl bg-terracotta text-white shadow-cta transition-all duration-150 hover:brightness-[1.07] active:scale-90 disabled:opacity-30 disabled:shadow-none"
       >
         <ArrowUp size={18} />
       </button>

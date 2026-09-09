@@ -24,11 +24,13 @@ export function EmptyState({
   const chips = SUGGESTED_PROMPTS[workspace][mode];
 
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-5 px-6 text-center">
+    <div className="flex h-full flex-col items-center justify-center gap-7 px-6 text-center">
       <Mascot state="idle" size="xl" />
-      <div className="max-w-md">
-        <p className="text-[19px] font-semibold leading-snug text-navy">{GREETINGS[workspace]}</p>
-        <p className="mt-1.5 text-[13px] text-charcoal/55">
+      <div className="max-w-lg">
+        <p className="text-[30px] font-bold leading-[1.15] tracking-tight text-navy sm:text-[36px]">
+          {GREETINGS[workspace]}
+        </p>
+        <p className="mx-auto mt-3 max-w-sm text-[14px] leading-relaxed text-charcoal/45">
           {WORKSPACES[workspace].tagline} — ask in your own words, no need to get it exactly right.
         </p>
       </div>
@@ -37,7 +39,7 @@ export function EmptyState({
           <button
             key={chip}
             onClick={() => onPick(chip)}
-            className="rounded-full border-2 border-navy/10 bg-white px-4 py-2 text-[13px] font-medium text-navy/75 shadow-card transition-all duration-150 hover:-translate-y-0.5 hover:border-terracotta/40 hover:text-navy active:translate-y-0"
+            className="rounded-full border border-navy/10 bg-white px-4 py-2 text-[13px] font-medium text-navy/70 shadow-xs transition-all duration-150 hover:-translate-y-0.5 hover:border-terracotta/35 hover:shadow-soft hover:text-navy active:translate-y-0"
           >
             {chip}
           </button>
