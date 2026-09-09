@@ -29,17 +29,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "workspace and message are required" }, { status: 400 });
   }
 
-  const configured = Boolean(
-    process.env.NEXT_PUBLIC_SUPABASE_URL &&
-      (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) &&
-      process.env.VOYAGE_API_KEY &&
-      process.env.ANTHROPIC_API_KEY
-  );
+  // Named individually (rather than one collapsed boolean) so the fallback
+  // message below can say exactly which one this deployment is missing,
+  // instead of everyone re-guessing which of five keys didn't take.
+  const missing: string[] = [];
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) missing.push("NEXT_PUBLIC_SUPABASE_URL");
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    missing.push("SUPABASE_SERVICE_ROLE_KEY (or NEXT_PUBLIC_SUPABASE_ANON_KEY)");
+  }
+  if (!process.env.VOYAGE_API_KEY) missing.push("VOYAGE_API_KEY");
+  if (!process.env.ANTHROPIC_API_KEY) missing.push("ANTHROPIC_API_KEY");
 
-  if (!configured) {
+  if (missing.length > 0) {
     return NextResponse.json({
       content:
-        "I'm not connected to the real knowledge base yet — an admin needs to add the Supabase, Voyage, and Anthropic keys for this environment (see .env.example). " +
+        `I'm not connected to the real knowledge base yet — this deployment is missing: ${missing.join(", ")}. ` +
+        "Add it in Vercel's Project Settings → Environment Variables (for the environment you're viewing) and redeploy. " +
         "Once that's wired up, I'll answer this from your team's actual sources instead of telling you this.",
       provenance: [],
     });
@@ -82,10 +87,14 @@ export async function POST(req: NextRequest) {
     });
   } catch (err) {
     console.error("[/api/ask]", err);
+    const detail = err instanceof Error ? err.message : String(err);
     return NextResponse.json(
       {
-        content:
-          "Something went wrong reaching the knowledge base just now. That's on my end — try again in a moment.",
+        // Internal tool, not public-facing — surfacing the real error (a
+        // short message, never a stack trace) beats another silent
+        // "something went wrong" that hides which of five moving pieces
+        // actually failed.
+        content: `Something went wrong reaching the knowledge base: ${detail}`,
         provenance: [],
       },
       { status: 200 }
