@@ -64,7 +64,13 @@ export function Sidebar({
   return (
     <aside
       className={clsx(
-        "fixed inset-y-3 left-3 z-50 flex w-[252px] flex-none flex-col overflow-hidden rounded-3xl bg-navy text-white/90 shadow-pop transition-transform duration-200 ease-out",
+        // No overflow-hidden here — the collapse toggle button below
+        // deliberately sits half outside this box (-right-3), and an
+        // overflow-hidden ancestor would clip it to a sliver. rounded-3xl
+        // still rounds this element's own background/shadow regardless of
+        // overflow; only the scrollable inner content needs clipping,
+        // handled by the wrapper just inside this.
+        "fixed inset-y-3 left-3 z-50 flex w-[252px] flex-none flex-col rounded-3xl bg-navy text-white/90 shadow-pop transition-transform duration-200 ease-out",
         "md:static md:inset-auto md:left-auto md:z-auto md:translate-x-0 md:shadow-pop md:transition-[width]",
         mobileOpen ? "translate-x-0" : "-translate-x-[120%]",
         collapsed ? "md:w-[76px]" : "md:w-[252px]"
@@ -78,6 +84,7 @@ export function Sidebar({
         {collapsed ? <ChevronRight size={13} /> : <ChevronLeft size={13} />}
       </button>
 
+      <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden rounded-3xl">
       <div
         className={clsx(
           "flex items-center pb-5 pt-6",
@@ -201,6 +208,7 @@ export function Sidebar({
             </p>
           </div>
         )}
+      </div>
       </div>
     </aside>
   );

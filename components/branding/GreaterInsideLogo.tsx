@@ -1,11 +1,20 @@
 import clsx from "clsx";
 
 /**
- * The real Greater Inside wordmark — two stacked lowercase lines with the
- * terracotta brand circle overlapping behind the right side, matching the
- * brand identity deck. `variant="light"` is the white-on-dark lockup for
- * the navy sidebar; `variant="dark"` is the black-on-off-white lockup for
- * light backgrounds.
+ * The real Greater Inside wordmark — two right-aligned stacked lowercase
+ * lines with the terracotta brand circle centered on their shared right
+ * edge, matching the brand identity deck. `variant="light"` is the
+ * white-on-dark lockup for the navy sidebar; `variant="dark"` is the
+ * black-on-off-white lockup for light backgrounds.
+ *
+ * Proportions below are measured directly off the brand deck (300dpi
+ * render of the logo slide), not eyeballed:
+ *  - circle diameter ≈ 1.575x the two-line text block's height
+ *  - circle is vertically centered on that block
+ *  - circle's horizontal CENTER sits on the text block's right edge
+ *    (not its own edge touching the text's edge — the center point)
+ *  - "inside" (the shorter word) right-aligns under "greater", not
+ *    left-aligns — the two lines share a right edge, not a left one
  */
 export function GreaterInsideLogo({
   variant = "light",
@@ -16,17 +25,12 @@ export function GreaterInsideLogo({
   size?: number;
   className?: string;
 }) {
-  // Sized directly off `size` in px rather than a % of the wrapper's own
-  // height — that wrapper's height is intrinsic (two lines of text), and
-  // a percentage height on an absolutely-positioned child of an
-  // auto-height container doesn't resolve per the CSS spec, so the circle
-  // was collapsing to almost nothing.
-  const circleSize = Math.round(size * 1.55);
+  const circleSize = Math.round(size * 3.1);
 
   return (
     <div
-      className={clsx("relative inline-block", className)}
-      style={{ fontSize: size, lineHeight: 0.98 }}
+      className={clsx("relative inline-block text-right", className)}
+      style={{ fontSize: size, lineHeight: 0.92 }}
     >
       <span
         className={clsx(
@@ -45,11 +49,11 @@ export function GreaterInsideLogo({
         inside
       </span>
       <span
-        className="absolute right-0 top-1/2 rounded-full bg-terracotta"
+        className="absolute left-full top-1/2 rounded-full bg-terracotta"
         style={{
           width: circleSize,
           height: circleSize,
-          transform: "translate(30%, -50%)",
+          transform: "translate(-50%, -50%)",
         }}
         aria-hidden
       />
