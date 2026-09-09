@@ -14,9 +14,9 @@ const SIZES = { sm: 40, md: 64, lg: 112, xl: 172 } as const;
  */
 const AVAILABLE: Record<MascotState, boolean> = {
   idle: true,
-  thinking: false,
-  speaking: false,
-  happy: false,
+  thinking: true,
+  speaking: true,
+  happy: true,
 };
 
 function resolveState(state: MascotState): MascotState | null {
@@ -25,12 +25,13 @@ function resolveState(state: MascotState): MascotState | null {
   return null;
 }
 
-// Until each state has its own illustration, the single real photo still
-// needs to *read* as thinking/speaking/happy — done with motion and small
-// accessory badges layered on top, rather than a different drawn face.
+// Light motion on top of the real per-state photos — a small extra sense
+// of life, not a substitute for the expression itself. Thinking gets no
+// image motion (the pose already reads as "concentrating"; wobbling it
+// would undercut that) but keeps its dot badge below.
 const STATE_MOTION: Record<MascotState, string> = {
   idle: "animate-float-y",
-  thinking: "animate-mascot-think",
+  thinking: "",
   speaking: "animate-mascot-talk",
   happy: "animate-bounce-in",
 };
