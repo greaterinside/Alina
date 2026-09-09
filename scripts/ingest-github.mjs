@@ -288,14 +288,35 @@ async function ingestRepo(token, repo) {
   return rows.length;
 }
 
+async function alreadyIngestedRepos() {
+  const { data, error } = await supabase.schema("tech").from("github_docs").select("repo");
+  if (error) {
+    console.error(`  couldn't check existing repos — ${error.message}`);
+    return new Set();
+  }
+  return new Set((data ?? []).map((r) => r.repo));
+}
+
 async function main() {
   console.log("Authenticating as the GitHub App...\n");
   const token = await getInstallationToken();
   const repos = await listInstallationRepos(token);
   console.log(`Installation has access to ${repos.length} repo(s).\n`);
 
+  // Without a Voyage payment method, each run only has a handful of
+  // requests before hitting the free-tier rate limit — skipping repos
+  // that already have rows means each re-run's limited budget goes
+  // toward new repos instead of re-embedding the same early ones every
+  // time. Re-run with a fresh Voyage key (or after adding billing) to
+  // force a refresh of everything.
+  const done = await alreadyIngestedRepos();
+
   let grandTotal = 0;
   for (const repo of repos) {
+    if (done.has(repo.full_name)) {
+      console.log(`${repo.full_name}\n  already ingested — skipping`);
+      continue;
+    }
     grandTotal += await ingestRepo(token, repo);
     await new Promise((r) => setTimeout(r, 250)); // be polite to GitHub's & Voyage's rate limits
   }
