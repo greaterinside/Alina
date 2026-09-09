@@ -16,6 +16,13 @@ export function GreaterInsideLogo({
   size?: number;
   className?: string;
 }) {
+  // Sized directly off `size` in px rather than a % of the wrapper's own
+  // height — that wrapper's height is intrinsic (two lines of text), and
+  // a percentage height on an absolutely-positioned child of an
+  // auto-height container doesn't resolve per the CSS spec, so the circle
+  // was collapsing to almost nothing.
+  const circleSize = Math.round(size * 1.55);
+
   return (
     <div
       className={clsx("relative inline-block", className)}
@@ -38,8 +45,12 @@ export function GreaterInsideLogo({
         inside
       </span>
       <span
-        className="absolute right-0 top-1/2 aspect-square rounded-full bg-terracotta"
-        style={{ height: "78%", transform: "translate(28%, -50%)" }}
+        className="absolute right-0 top-1/2 rounded-full bg-terracotta"
+        style={{
+          width: circleSize,
+          height: circleSize,
+          transform: "translate(30%, -50%)",
+        }}
         aria-hidden
       />
     </div>

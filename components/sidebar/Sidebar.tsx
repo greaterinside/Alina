@@ -26,7 +26,17 @@ const NAV = [
 
 const COLLAPSE_KEY = "alina-sidebar-collapsed";
 
-export function Sidebar({ identity }: { identity: Identity }) {
+export function Sidebar({
+  identity,
+  mobileOpen = false,
+  onNavigate = () => {},
+}: {
+  identity: Identity;
+  /** Whether the off-canvas drawer is open (ignored at md+, where the sidebar is always visible). */
+  mobileOpen?: boolean;
+  /** Called when a nav link is tapped — used to close the mobile drawer. */
+  onNavigate?: () => void;
+}) {
   const pathname = usePathname();
   const showAdmin = canSeeAdminSections(identity.role);
   const items = NAV.filter((item) => !item.admin || showAdmin);
@@ -54,14 +64,16 @@ export function Sidebar({ identity }: { identity: Identity }) {
   return (
     <aside
       className={clsx(
-        "relative flex h-full flex-none flex-col overflow-hidden rounded-3xl bg-navy text-white/90 shadow-pop transition-[width] duration-200 ease-out",
-        collapsed ? "w-[76px]" : "w-[252px]"
+        "fixed inset-y-3 left-3 z-50 flex w-[252px] flex-none flex-col overflow-hidden rounded-3xl bg-navy text-white/90 shadow-pop transition-transform duration-200 ease-out",
+        "md:static md:inset-auto md:left-auto md:z-auto md:translate-x-0 md:shadow-pop md:transition-[width]",
+        mobileOpen ? "translate-x-0" : "-translate-x-[120%]",
+        collapsed ? "md:w-[76px]" : "md:w-[252px]"
       )}
     >
       <button
         onClick={toggle}
         title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        className="absolute -right-3 top-8 z-10 grid h-6 w-6 place-items-center rounded-full border border-navy/10 bg-white text-navy shadow-soft transition-transform hover:scale-105 active:scale-95"
+        className="absolute -right-3 top-8 z-10 hidden h-6 w-6 place-items-center rounded-full border border-navy/10 bg-white text-navy shadow-soft transition-transform hover:scale-105 active:scale-95 md:grid"
       >
         {collapsed ? <ChevronRight size={13} /> : <ChevronLeft size={13} />}
       </button>
@@ -92,6 +104,7 @@ export function Sidebar({ identity }: { identity: Identity }) {
               <li key={href}>
                 <Link
                   href={href}
+                  onClick={onNavigate}
                   title={collapsed ? label : undefined}
                   className={clsx(
                     "group flex items-center rounded-xl py-2.5 text-[13.5px] font-medium transition-all duration-150",
@@ -132,6 +145,7 @@ export function Sidebar({ identity }: { identity: Identity }) {
                 <li key={id}>
                   <Link
                     href={`/ask?ws=${id}`}
+                    onClick={onNavigate}
                     title={collapsed ? WORKSPACES[id].name : undefined}
                     className={clsx(
                       "flex items-center rounded-xl py-2 text-[12.5px] text-white/60 transition-colors hover:bg-white/[0.08] hover:text-white",
@@ -151,6 +165,7 @@ export function Sidebar({ identity }: { identity: Identity }) {
       <div className="px-3 pb-3">
         <Link
           href="/ask"
+          onClick={onNavigate}
           title={collapsed ? "Ask Alina" : undefined}
           className={clsx(
             "flex items-center rounded-2xl bg-terracotta/15 text-terracotta transition-all duration-150 hover:bg-terracotta/20 active:scale-[0.98]",
