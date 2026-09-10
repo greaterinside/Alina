@@ -2,7 +2,6 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { LoginForm } from "@/components/auth/LoginForm";
-import { GreaterInsideLogo } from "@/components/branding/GreaterInsideLogo";
 
 export default async function LoginPage() {
   const supabase = await getSupabaseServerClient();
@@ -17,9 +16,6 @@ export default async function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-[#E9E9E6] px-4">
       <div className="w-full max-w-[380px]">
         <div className="card-chunky p-7">
-          <div className="mb-6 flex justify-center">
-            <GreaterInsideLogo variant="dark" size={22} />
-          </div>
           <p className="mb-1 text-[15px] font-semibold text-navy">Sign in to Alina</p>
           <p className="mb-6 text-[12.5px] text-charcoal/55">
             Use the email and password an admin set up for you.
