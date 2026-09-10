@@ -11,6 +11,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Sparkles,
+  LogOut,
 } from "lucide-react";
 import clsx from "clsx";
 import type { Identity } from "@/lib/identity";
@@ -201,12 +202,22 @@ export function Sidebar({
           {identity.name.slice(0, 2).toUpperCase()}
         </span>
         {!collapsed && (
-          <div className="min-w-0 leading-tight">
+          <div className="min-w-0 flex-1 leading-tight">
             <p className="truncate text-[12.5px] font-medium text-white">{identity.name}</p>
             <p className="truncate text-[10.5px] capitalize text-white/50">
               {identity.isDemo ? "Demo mode" : identity.role}
             </p>
           </div>
+        )}
+        {!identity.isDemo && (
+          <form action="/auth/signout" method="POST" title="Sign out">
+            <button
+              type="submit"
+              className="grid h-7 w-7 flex-none place-items-center rounded-lg text-white/50 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              <LogOut size={14} />
+            </button>
+          </form>
         )}
       </div>
       </div>

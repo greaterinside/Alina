@@ -64,6 +64,34 @@ Without the env vars set, the app still runs: the sidebar defaults to a
 demo admin identity (so every screen is reachable) and `/api/ask` returns
 a plain "I'm not connected yet" message instead of inventing an answer.
 
+## Signing in
+
+Once Supabase env vars are set, every page except `/login` requires a real
+session (`middleware.ts`) — the demo-admin fallback above only applies when
+Supabase isn't configured at all.
+
+There's no self-serve sign-up. To give someone access:
+
+1. **Supabase Dashboard → Authentication → Users → Add user** — set their
+   email and a password (or send an invite email, if that's turned on for
+   the project). Copy the generated **User UID**.
+2. Add or update their row in `public.roles` with that same UID as
+   `user_id`, plus their `name`, `role` (`admin` / `senior` / `member`),
+   and `workspaces` (which of `assistant`/`tech`/`social`/`support` they
+   can query):
+   ```sql
+   insert into public.roles (user_id, name, role, workspaces)
+   values ('<the UID from step 1>', 'Diksha', 'member', array['assistant', 'tech'])
+   on conflict (user_id) do update
+     set name = excluded.name, role = excluded.role, workspaces = excluded.workspaces;
+   ```
+3. They sign in at `/login` with that email/password. Admins can then grant
+   or revoke individual workspace access for anyone from the **Team** page
+   (click a person's workspace pill) — no more SQL needed after the first
+   row exists.
+
+Signing out is the icon next to your name at the bottom of the sidebar.
+
 ## Embeddings backfill
 
 `match_knowledge` reads `embedding` columns on six tables — `tech.notes`,

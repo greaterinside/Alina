@@ -35,7 +35,20 @@ export async function getCurrentIdentity(): Promise<Identity> {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return DEMO_IDENTITY;
+  if (!user) {
+    // middleware.ts redirects unauthenticated visitors to /login before any
+    // protected page reaches this — this branch is a defensive fallback
+    // (e.g. an API route with no session), so it stays locked down rather
+    // than defaulting to admin.
+    return {
+      userId: null,
+      name: "Guest",
+      email: "",
+      role: "member",
+      workspaces: ["assistant"],
+      isDemo: false,
+    };
+  }
 
   const { data, error } = await supabase
     .from("roles")
