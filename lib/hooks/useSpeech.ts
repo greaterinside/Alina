@@ -11,6 +11,7 @@ import { useCallback, useRef, useState } from "react";
 export function useSpeech() {
   const [speaking, setSpeaking] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const urlRef = useRef<string | null>(null);
 
@@ -31,6 +32,7 @@ export function useSpeech() {
   const speak = useCallback(
     async (text: string) => {
       stop();
+      setError(null);
       setLoading(true);
       try {
         const res = await fetch("/api/speak", {
@@ -38,7 +40,10 @@ export function useSpeech() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ text }),
         });
-        if (!res.ok) throw new Error(`speak request failed: ${res.status}`);
+        if (!res.ok) {
+          const detail = await res.json().catch(() => null);
+          throw new Error(detail?.error ?? `speak request failed: ${res.status}`);
+        }
 
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
@@ -53,12 +58,14 @@ export function useSpeech() {
         };
         audio.onerror = () => {
           setSpeaking(false);
+          setError("Playback failed — the audio didn't load correctly.");
           cleanup();
         };
         await audio.play();
       } catch (err) {
         console.error("[useSpeech]", err);
         setSpeaking(false);
+        setError(err instanceof Error ? err.message : "Couldn't play audio.");
       } finally {
         setLoading(false);
       }
@@ -66,5 +73,5 @@ export function useSpeech() {
     [stop, cleanup]
   );
 
-  return { speak, stop, speaking, loading, supported: true };
+  return { speak, stop, speaking, loading, error, supported: true };
 }

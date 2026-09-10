@@ -41,7 +41,7 @@ export function AskScreen({
   const [justAnswered, setJustAnswered] = useState(false);
 
   const threadRef = useRef<HTMLDivElement>(null);
-  const { speak, speaking, supported: speechSupported } = useSpeech();
+  const { speak, speaking, error: speechError, supported: speechSupported } = useSpeech();
   const { start: startMic, listening, supported: micSupported } = useVoiceInput((text) =>
     setInput((prev) => (prev ? `${prev} ${text}` : text))
   );
@@ -169,6 +169,11 @@ export function AskScreen({
             )}
           </div>
           <div className="flex-none px-6 pb-6 pt-2">
+            {speechError && (
+              <div className="mx-auto mb-2 flex max-w-2xl items-center justify-between rounded-2xl border border-terracotta/25 bg-terracotta/10 px-3.5 py-2 text-[12.5px] text-terracotta">
+                <span>Couldn&apos;t play voice: {speechError}</span>
+              </div>
+            )}
             <div className="mx-auto flex max-w-2xl items-end gap-3">
               <Mascot state={mascotState} size="md" className="mb-1 hidden sm:block" />
               <div className="flex-1">
