@@ -150,5 +150,19 @@ export async function composeAnswer(opts: {
 
   if (!res.ok) throw new Error(`Answer generation failed: ${res.status}`);
   const data = await res.json();
-  return data.content?.[0]?.text ?? "";
+
+  // Anthropic's response can include non-text blocks (e.g. thinking) ahead
+  // of the actual answer — content[0] isn't reliably the text block, so
+  // grab every text block instead of assuming position.
+  const text = (data.content ?? [])
+    .filter((block: { type: string; text?: string }) => block.type === "text")
+    .map((block: { text?: string }) => block.text ?? "")
+    .join("\n")
+    .trim();
+
+  if (!text) {
+    console.error("[composeAnswer] no text block in response", JSON.stringify(data).slice(0, 500));
+    return "I found relevant context but couldn't compose an answer from it — try rephrasing the question.";
+  }
+  return text;
 }
