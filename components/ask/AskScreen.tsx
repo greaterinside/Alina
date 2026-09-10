@@ -28,6 +28,11 @@ export function AskScreen({
   const searchParams = useSearchParams();
   const requestedWs = searchParams.get("ws") as WorkspaceId | null;
 
+  const deniedWorkspace =
+    requestedWs && WORKSPACES[requestedWs] && !allowedWorkspaces.includes(requestedWs)
+      ? requestedWs
+      : null;
+
   const [workspace, setWorkspace] = useState<WorkspaceId>(
     requestedWs && allowedWorkspaces.includes(requestedWs)
       ? requestedWs
@@ -132,6 +137,12 @@ export function AskScreen({
 
   return (
     <div className="flex h-full flex-col">
+      {deniedWorkspace && (
+        <div className="flex-none border-b border-terracotta/20 bg-terracotta/10 px-6 py-2.5 text-[12.5px] text-terracotta">
+          Oops — you don&apos;t have access to {WORKSPACES[deniedWorkspace].name}. Showing{" "}
+          {WORKSPACES[workspace].name} instead. Ask an admin on the Team page if you need it.
+        </div>
+      )}
       <div className="flex flex-none flex-wrap items-center gap-3 border-b border-navy/8 px-6 py-4">
         <WorkspaceTabs allowed={allowedWorkspaces} active={workspace} onChange={setWorkspace} />
         <span className="pill-tag hidden sm:inline-flex">Tone: {WORKSPACES[workspace].toneHint}</span>

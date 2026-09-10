@@ -1,11 +1,12 @@
 import { Users, AlertTriangle } from "lucide-react";
 import { requireAdminIdentity } from "@/lib/admin-gate";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
-import { WORKSPACE_ORDER, WORKSPACES, type Role, type WorkspaceId } from "@/lib/types";
+import { type Role, type WorkspaceId } from "@/lib/types";
 import { PageHeader } from "@/components/admin/PageHeader";
+import { TeamAccessGrid } from "@/components/team/TeamAccessGrid";
 
 export default async function TeamPage() {
-  await requireAdminIdentity();
+  const identity = await requireAdminIdentity();
 
   const supabase = await getSupabaseServerClient();
   const { data, error } = supabase
@@ -42,41 +43,15 @@ export default async function TeamPage() {
             body="public.roles exists and is reachable, but has no rows. Add one per team member — this table reads live, nothing here is placeholder data."
           />
         ) : (
-          <div className="card-chunky overflow-hidden">
-            <div className="grid grid-cols-[1.4fr_1fr_1.6fr] gap-3 bg-offwhite px-5 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-navy/45">
-              <span>Person</span>
-              <span>Role</span>
-              <span>Workspaces</span>
-            </div>
-            {members.map((m) => (
-              <div
-                key={m.user_id}
-                className="grid grid-cols-[1.4fr_1fr_1.6fr] items-center gap-3 border-t border-navy/6 px-5 py-3.5"
-              >
-                <div className="flex items-center gap-2.5">
-                  <span className="grid h-8 w-8 flex-none place-items-center rounded-full bg-navy/8 text-[11px] font-semibold text-navy">
-                    {m.name.slice(0, 2).toUpperCase()}
-                  </span>
-                  <p className="text-[13.5px] font-medium text-navy">{m.name}</p>
-                </div>
-                <p className="text-[12.5px] capitalize text-charcoal/65">{m.role}</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {WORKSPACE_ORDER.map((id) => (
-                    <span
-                      key={id}
-                      className={
-                        m.workspaces?.includes(id)
-                          ? "pill-tag"
-                          : "inline-flex items-center rounded-full bg-navy/5 px-3 py-1 text-xs text-navy/30"
-                      }
-                    >
-                      {WORKSPACES[id].name}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
+          <>
+            <TeamAccessGrid initialMembers={members} canEdit={identity.role === "admin"} />
+            {identity.role !== "admin" && (
+              <p className="mt-3 text-[12px] text-charcoal/50">
+                Only admins can change who has access to which workspace — you can view this as a
+                senior teammate.
+              </p>
+            )}
+          </>
         )}
       </div>
     </div>
