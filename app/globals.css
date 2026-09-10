@@ -45,4 +45,54 @@
   .card-chunky {
     @apply rounded-3xl border border-navy/5 bg-white shadow-card;
   }
+
+  /* Alina's answers are real Markdown from Claude — this renders it instead
+     of leaving "**bold**" and "- " asterisks/dashes visible as plain text. */
+  .markdown-answer {
+    @apply leading-relaxed;
+  }
+  .markdown-answer > :first-child {
+    @apply mt-0;
+  }
+  .markdown-answer > :last-child {
+    @apply mb-0;
+  }
+  .markdown-answer p {
+    @apply mb-3;
+  }
+  .markdown-answer strong {
+    @apply font-semibold text-navy;
+  }
+  .markdown-answer ul {
+    @apply mb-3 list-disc space-y-1 pl-5;
+  }
+  .markdown-answer ol {
+    @apply mb-3 list-decimal space-y-1 pl-5;
+  }
+  .markdown-answer li > p {
+    @apply mb-0;
+  }
+  .markdown-answer h1,
+  .markdown-answer h2,
+  .markdown-answer h3 {
+    @apply mb-2 mt-4 font-semibold text-navy;
+  }
+  .markdown-answer h1:first-child,
+  .markdown-answer h2:first-child,
+  .markdown-answer h3:first-child {
+    @apply mt-0;
+  }
+  .markdown-answer blockquote {
+    @apply mb-3 border-l-2 border-navy/15 pl-3 text-charcoal/70;
+  }
+  .markdown-answer hr {
+    @apply my-4 border-navy/10;
+  }
+  .markdown-answer table {
+    @apply mb-3 w-full border-collapse text-left;
+  }
+  .markdown-answer th,
+  .markdown-answer td {
+    @apply border border-navy/10 px-2.5 py-1.5;
+  }
 }

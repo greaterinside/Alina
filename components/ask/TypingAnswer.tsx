@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Copy, Check, RotateCcw } from "lucide-react";
+import { MarkdownAnswer } from "@/components/ask/MarkdownAnswer";
 import type { ChatMessage } from "@/lib/types";
 
 export function TypingAnswer({
@@ -30,9 +31,7 @@ export function TypingAnswer({
       <p className="mb-3 text-[12px] font-semibold uppercase tracking-wide text-navy/40">
         {prompt.content}
       </p>
-      <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-charcoal">
-        {answer.content}
-      </p>
+      <MarkdownAnswer content={answer.content} className="text-[15px] text-charcoal" />
 
       <div className="mt-4 flex gap-2">
         <button

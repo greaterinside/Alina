@@ -2,6 +2,7 @@
 
 import { Volume2 } from "lucide-react";
 import { Mascot } from "@/components/mascot/Mascot";
+import { MarkdownAnswer } from "@/components/ask/MarkdownAnswer";
 import type { ChatMessage } from "@/lib/types";
 
 export function MessageBubble({
@@ -25,9 +26,7 @@ export function MessageBubble({
     <div className="flex items-start gap-3">
       <Mascot state="happy" size="sm" className="mt-0.5" />
       <div className="min-w-0 max-w-[80%] rounded-3xl rounded-tl-lg border border-navy/[0.07] bg-white px-4 py-3.5 shadow-card">
-        <p className="whitespace-pre-wrap text-[14.5px] leading-relaxed text-charcoal">
-          {message.content}
-        </p>
+        <MarkdownAnswer content={message.content} className="text-[14.5px] text-charcoal" />
 
         {onSpeak && (
           <button
