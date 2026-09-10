@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
- * Pulls README files, architecture-decision docs, a bounded sample of
- * source files, and merged-PR descriptions from every repo the Greater
- * Inside GitHub App is installed on, embeds them with Voyage AI, and
- * upserts them into tech.github_docs so match_knowledge can search them
- * from the Tech workspace. Needs supabase/migrations/0003_github_code_files.sql
+ * Pulls README files, architecture-decision docs, every matching source
+ * file, and merged-PR descriptions from every repo the Greater Inside
+ * GitHub App is installed on, embeds them with Voyage AI, and upserts
+ * them into tech.github_docs so match_knowledge can search them from the
+ * Tech workspace. Needs supabase/migrations/0003_github_code_files.sql
  * applied first — it adds the 'code_file' doc_type this script writes.
  *
  * Run:
@@ -15,11 +15,14 @@
  * reads them from your shell env, or from .env.local if present (that file
  * is git-ignored; this script never touches the repo).
  *
- * Safe to re-run: upserts on (repo, doc_type, path), so an unchanged doc
- * just gets overwritten with itself. There's no incremental "since last
- * run" cursor yet — each run re-fetches everything, which is fine for a
- * handful of repos but will need pagination/cursoring if that grows.
- * Merged PRs are capped at the most recent 50 per repo for the same reason.
+ * Safe to re-run, and resumable per-file: it fetches every (repo,
+ * doc_type, path) already in the database once at startup and skips
+ * exactly those, so a run interrupted by a rate limit can pick back up
+ * without re-spending requests on files it already finished — important
+ * since this ingests full codebases now, not a small sample, and without
+ * a Voyage payment method the free tier's 3-requests/minute cap makes a
+ * full run take many, many retries. Merged PRs are still capped at the
+ * most recent 50 per repo.
  *
  * Uses voyage-3 (1024-dim) — must match tech.github_docs.embedding's
  * column type (see supabase/migrations/0002_github_docs.sql).
@@ -46,17 +49,17 @@ const VOYAGE_MODEL = "voyage-3";
 const MAX_INPUT_CHARS = 8000;
 const MAX_PRS_PER_REPO = 50;
 
-// Source-code ingestion is intentionally capped: without a Voyage payment
-// method, the free tier throttles hard (3 requests/min, 10K tokens/min —
-// see the script's own retry loop advice), and a single repo's docs are
-// embedded in one batched call. Pulling every file in every repo would
-// blow that budget instantly, so this covers a bounded sample per repo,
-// not the whole codebase.
 const CODE_EXTENSIONS = /\.(ts|tsx|js|jsx|mjs|cjs|py|go|rb|java|php|rs|c|cpp|h|hpp|cs|sql)$/i;
 const CODE_EXCLUDE_PATH = /(^|\/)(node_modules|dist|build|vendor|\.next|\.git)\//i;
-const MAX_CODE_FILES_PER_REPO = 8;
-const MAX_CODE_FILE_CHARS = 100_000; // skip generated/vendored files far past what a hand-written source file looks like
+const MAX_CODE_FILE_CHARS = 200_000; // skip generated/vendored files far past what a hand-written source file looks like
 const CODE_CHUNK_CHARS = 3000;
+
+// Every Voyage call is a request against the (possibly still free-tier)
+// rate limit, so texts are grouped into batches under this size instead
+// of one call per repo — keeps each request reasonably sized and means a
+// large repo makes several separate, individually-resumable calls rather
+// than one all-or-nothing one.
+const EMBED_BATCH_CHAR_BUDGET = 20_000;
 
 const missing = [
   ["NEXT_PUBLIC_SUPABASE_URL", SUPABASE_URL],
@@ -179,16 +182,14 @@ async function fetchAdrDocs(token, owner, repo, tree) {
 }
 
 async function fetchSourceFiles(token, owner, repo, tree) {
-  const candidates = tree
-    .filter(
-      (entry) =>
-        entry.type === "blob" &&
-        CODE_EXTENSIONS.test(entry.path) &&
-        !CODE_EXCLUDE_PATH.test(entry.path) &&
-        (entry.size ?? 0) > 0 &&
-        (entry.size ?? 0) <= MAX_CODE_FILE_CHARS
-    )
-    .slice(0, MAX_CODE_FILES_PER_REPO);
+  const candidates = tree.filter(
+    (entry) =>
+      entry.type === "blob" &&
+      CODE_EXTENSIONS.test(entry.path) &&
+      !CODE_EXCLUDE_PATH.test(entry.path) &&
+      (entry.size ?? 0) > 0 &&
+      (entry.size ?? 0) <= MAX_CODE_FILE_CHARS
+  );
 
   const docs = [];
   for (const entry of candidates) {
@@ -240,61 +241,105 @@ async function embedBatch(texts) {
   return data.data.map((d) => d.embedding);
 }
 
-async function ingestRepo(token, repo) {
+const keyOf = (repo, docType, path) => `${repo} ${docType} ${path}`;
+
+async function fetchExistingKeys() {
+  const keys = new Set();
+  const pageSize = 1000;
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabase
+      .schema("tech")
+      .from("github_docs")
+      .select("repo, doc_type, path")
+      .range(from, from + pageSize - 1);
+    if (error) {
+      console.error(`  couldn't check existing docs — ${error.message}`);
+      return keys;
+    }
+    for (const row of data ?? []) keys.add(keyOf(row.repo, row.doc_type, row.path));
+    if (!data || data.length < pageSize) break;
+  }
+  return keys;
+}
+
+/** Greedily groups docs into batches under EMBED_BATCH_CHAR_BUDGET chars each. */
+function batchDocs(docs) {
+  const batches = [];
+  let current = [];
+  let currentChars = 0;
+  for (const doc of docs) {
+    const size = Math.min(doc.content.length, MAX_INPUT_CHARS);
+    if (current.length > 0 && currentChars + size > EMBED_BATCH_CHAR_BUDGET) {
+      batches.push(current);
+      current = [];
+      currentChars = 0;
+    }
+    current.push(doc);
+    currentChars += size;
+  }
+  if (current.length > 0) batches.push(current);
+  return batches;
+}
+
+async function ingestRepo(token, repo, existingKeys) {
   const [owner, name] = repo.full_name.split("/");
-  console.log(`${repo.full_name}`);
+  console.log(repo.full_name);
 
   const tree = await fetchRepoTree(token, owner, name, repo.default_branch);
 
-  const docs = [
+  const allDocs = [
     await fetchReadme(token, owner, name),
     ...(await fetchAdrDocs(token, owner, name, tree)),
     ...(await fetchSourceFiles(token, owner, name, tree)),
     ...(await fetchMergedPRs(token, owner, name)),
   ].filter(Boolean);
 
-  if (docs.length === 0) {
+  const docs = allDocs.filter((d) => !existingKeys.has(keyOf(repo.full_name, d.doc_type, d.path)));
+
+  if (allDocs.length === 0) {
     console.log("  nothing to ingest");
     return 0;
   }
-
-  const texts = docs.map((d) => d.content.slice(0, MAX_INPUT_CHARS));
-  let embeddings;
-  try {
-    embeddings = await embedBatch(texts);
-  } catch (err) {
-    console.error(`  embedding batch failed — ${err.message}`);
+  if (docs.length === 0) {
+    console.log(`  up to date (${allDocs.length} doc(s) already ingested)`);
     return 0;
   }
 
-  const rows = docs.map((d, i) => ({
-    repo: repo.full_name,
-    doc_type: d.doc_type,
-    path: d.path,
-    title: d.title,
-    content: d.content,
-    source_url: d.source_url,
-    embedding: embeddings[i],
-    github_updated_at: d.github_updated_at ?? repo.pushed_at,
-  }));
+  let total = 0;
+  for (const batch of batchDocs(docs)) {
+    const texts = batch.map((d) => d.content.slice(0, MAX_INPUT_CHARS));
+    let embeddings;
+    try {
+      embeddings = await embedBatch(texts);
+    } catch (err) {
+      console.error(`  embedding batch failed — ${err.message}`);
+      continue; // this batch didn't go through; later batches for this repo still might
+    }
 
-  const { error } = await supabase.schema("tech").from("github_docs").upsert(rows, { onConflict: "repo,doc_type,path" });
-  if (error) {
-    console.error(`  upsert failed — ${error.message}`);
-    return 0;
+    const rows = batch.map((d, i) => ({
+      repo: repo.full_name,
+      doc_type: d.doc_type,
+      path: d.path,
+      title: d.title,
+      content: d.content,
+      source_url: d.source_url,
+      embedding: embeddings[i],
+      github_updated_at: d.github_updated_at ?? repo.pushed_at,
+    }));
+
+    const { error } = await supabase.schema("tech").from("github_docs").upsert(rows, { onConflict: "repo,doc_type,path" });
+    if (error) {
+      console.error(`  upsert failed — ${error.message}`);
+      continue;
+    }
+
+    total += rows.length;
+    rows.forEach((r) => existingKeys.add(keyOf(r.repo, r.doc_type, r.path)));
+    await new Promise((r) => setTimeout(r, 250)); // be polite to Voyage's rate limits between batches
   }
 
-  console.log(`  ingested ${rows.length} doc(s)`);
-  return rows.length;
-}
-
-async function alreadyIngestedRepos() {
-  const { data, error } = await supabase.schema("tech").from("github_docs").select("repo");
-  if (error) {
-    console.error(`  couldn't check existing repos — ${error.message}`);
-    return new Set();
-  }
-  return new Set((data ?? []).map((r) => r.repo));
+  console.log(`  ingested ${total}/${docs.length} new doc(s)`);
+  return total;
 }
 
 async function main() {
@@ -303,24 +348,18 @@ async function main() {
   const repos = await listInstallationRepos(token);
   console.log(`Installation has access to ${repos.length} repo(s).\n`);
 
-  // Without a Voyage payment method, each run only has a handful of
-  // requests before hitting the free-tier rate limit — skipping repos
-  // that already have rows means each re-run's limited budget goes
-  // toward new repos instead of re-embedding the same early ones every
-  // time. Re-run with a fresh Voyage key (or after adding billing) to
-  // force a refresh of everything.
-  const done = await alreadyIngestedRepos();
+  // Fetched once, then kept up to date in memory as this run succeeds, so
+  // a repo that needs several embedding batches doesn't re-spend requests
+  // on files it already finished within the same run, and a later run
+  // picks up wherever the rate limit cut this one off.
+  const existingKeys = await fetchExistingKeys();
 
   let grandTotal = 0;
   for (const repo of repos) {
-    if (done.has(repo.full_name)) {
-      console.log(`${repo.full_name}\n  already ingested — skipping`);
-      continue;
-    }
-    grandTotal += await ingestRepo(token, repo);
-    await new Promise((r) => setTimeout(r, 250)); // be polite to GitHub's & Voyage's rate limits
+    grandTotal += await ingestRepo(token, repo, existingKeys);
+    await new Promise((r) => setTimeout(r, 250)); // be polite to GitHub's rate limits
   }
-  console.log(`\nFinished. ${grandTotal} doc(s) ingested across ${repos.length} repo(s).`);
+  console.log(`\nFinished. ${grandTotal} new doc(s) ingested across ${repos.length} repo(s).`);
 }
 
 main().catch((err) => {
