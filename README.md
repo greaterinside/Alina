@@ -119,6 +119,8 @@ SQL Editor) and add the union branch before relying on this.
 | `ANTHROPIC_API_KEY` | Composing the answer from retrieved context |
 | `ALINA_MODEL` | Optional override for the answer model (default `claude-sonnet-5`) |
 | `GITHUB_APP_ID` / `GITHUB_APP_PRIVATE_KEY` / `GITHUB_INSTALLATION_ID` | `scripts/ingest-github.mjs`'s GitHub App auth |
+| `ELEVENLABS_API_KEY` | `/api/speak` — voice for "Hear this" / auto-speak |
+| `ELEVENLABS_VOICE_ID` | Optional — which ElevenLabs voice to use (defaults to a preset one) |
 
 ## Next up
 

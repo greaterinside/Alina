@@ -1,43 +1,70 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 /**
- * Wraps the browser's free SpeechSynthesis API so the Ask screen can read
- * Alina's answers out loud — the "Jarvis" voice output the founder asked
- * for, no paid TTS vendor needed.
+ * Reads Alina's answers out loud via ElevenLabs (/api/speak). Replaced the
+ * free browser SpeechSynthesis voice after direct feedback that it wasn't
+ * usable — this fetches real audio from the server instead of relying on
+ * whatever voice the OS/browser happens to ship.
  */
 export function useSpeech() {
   const [speaking, setSpeaking] = useState(false);
-  const [supported, setSupported] = useState(false);
-  const utterRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const [loading, setLoading] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const urlRef = useRef<string | null>(null);
 
-  useEffect(() => {
-    setSupported(typeof window !== "undefined" && "speechSynthesis" in window);
-  }, []);
-
-  const speak = useCallback((text: string) => {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-    window.speechSynthesis.cancel();
-
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 1.02;
-    utterance.pitch = 1.05;
-    utterance.onstart = () => setSpeaking(true);
-    utterance.onend = () => setSpeaking(false);
-    utterance.onerror = () => setSpeaking(false);
-    utterRef.current = utterance;
-    window.speechSynthesis.speak(utterance);
+  const cleanup = useCallback(() => {
+    if (urlRef.current) {
+      URL.revokeObjectURL(urlRef.current);
+      urlRef.current = null;
+    }
   }, []);
 
   const stop = useCallback(() => {
-    if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      window.speechSynthesis.cancel();
-    }
+    audioRef.current?.pause();
+    if (audioRef.current) audioRef.current.currentTime = 0;
+    cleanup();
     setSpeaking(false);
-  }, []);
+  }, [cleanup]);
 
-  useEffect(() => stop, [stop]);
+  const speak = useCallback(
+    async (text: string) => {
+      stop();
+      setLoading(true);
+      try {
+        const res = await fetch("/api/speak", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text }),
+        });
+        if (!res.ok) throw new Error(`speak request failed: ${res.status}`);
 
-  return { speak, stop, speaking, supported };
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        urlRef.current = url;
+
+        const audio = new Audio(url);
+        audioRef.current = audio;
+        audio.onplay = () => setSpeaking(true);
+        audio.onended = () => {
+          setSpeaking(false);
+          cleanup();
+        };
+        audio.onerror = () => {
+          setSpeaking(false);
+          cleanup();
+        };
+        await audio.play();
+      } catch (err) {
+        console.error("[useSpeech]", err);
+        setSpeaking(false);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [stop, cleanup]
+  );
+
+  return { speak, stop, speaking, loading, supported: true };
 }
