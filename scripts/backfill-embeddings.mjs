@@ -8,18 +8,18 @@
  *   node scripts/backfill-embeddings.mjs
  *
  * Needs NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, and
- * VOYAGE_API_KEY — reads them from your shell env, or from .env.local if
+ * OPENAI_API_KEY — reads them from your shell env, or from .env.local if
  * present (that file is git-ignored; this script never touches the repo).
  *
  * A word of caution before running this against production: it's a write
- * job — every row missing an embedding gets one via a live Voyage API
+ * job — every row missing an embedding gets one via a live OpenAI API
  * call, table by table, with no dry-run mode. Skim the SOURCES list below
  * against your actual schema first.
  *
- * IMPORTANT: this uses voyage-3 (1024-dim output). If the `embedding`
- * columns were created with a different vector dimension, the UPDATE
- * calls below will fail with a Postgres dimension-mismatch error — change
- * VOYAGE_MODEL to match instead of the column type.
+ * IMPORTANT: this uses text-embedding-3-small at 1024 dimensions. If the
+ * `embedding` columns were created with a different vector dimension, the
+ * UPDATE calls below will fail with a Postgres dimension-mismatch error —
+ * change EMBEDDING_DIMENSIONS to match instead of the column type.
  */
 
 import { createClient } from "@supabase/supabase-js";
@@ -34,14 +34,15 @@ if (existsSync(".env.local")) {
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const VOYAGE_API_KEY = process.env.VOYAGE_API_KEY;
-const VOYAGE_MODEL = "voyage-3";
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const EMBEDDING_MODEL = "text-embedding-3-small";
+const EMBEDDING_DIMENSIONS = 1024;
 const BATCH_SIZE = 50;
-const MAX_INPUT_CHARS = 8000; // rough guard against Voyage's per-input token cap
+const MAX_INPUT_CHARS = 8000; // rough guard against the model's per-input token cap
 
-if (!SUPABASE_URL || !SERVICE_KEY || !VOYAGE_API_KEY) {
+if (!SUPABASE_URL || !SERVICE_KEY || !OPENAI_API_KEY) {
   console.error(
-    "Missing NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, or VOYAGE_API_KEY " +
+    "Missing NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, or OPENAI_API_KEY " +
       "(set them in your shell, or in .env.local)."
   );
   process.exit(1);
@@ -61,20 +62,17 @@ const SOURCES = [
 ];
 
 async function embedBatch(texts) {
-  const res = await fetch("https://api.voyageai.com/v1/embeddings", {
+  const res = await fetch("https://api.openai.com/v1/embeddings", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${VOYAGE_API_KEY}`,
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
       "Content-Type": "application/json",
     },
-    // "document", not "query" — these are the stored-corpus side of
-    // Voyage's recommended asymmetric embedding setup; lib/rag.ts's
-    // live query embedding uses "query" to match.
-    body: JSON.stringify({ input: texts, model: VOYAGE_MODEL, input_type: "document" }),
+    body: JSON.stringify({ input: texts, model: EMBEDDING_MODEL, dimensions: EMBEDDING_DIMENSIONS }),
   });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    throw new Error(`Voyage embeddings failed: ${res.status} ${body}`);
+    throw new Error(`OpenAI embeddings failed: ${res.status} ${body}`);
   }
   const data = await res.json();
   return data.data.map((d) => d.embedding);

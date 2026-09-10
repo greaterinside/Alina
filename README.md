@@ -56,7 +56,7 @@ be before running it.
 
 ```bash
 npm install
-cp .env.example .env.local   # fill in Supabase / Voyage / Anthropic keys
+cp .env.example .env.local   # fill in Supabase / OpenAI / Anthropic keys
 npm run dev
 ```
 
@@ -80,8 +80,8 @@ Idempotent (only touches rows where `embedding is null`), so it's safe to
 re-run after new rows land — though a live webhook/trigger that embeds a
 row the moment it's written would make this unnecessary going forward;
 this script is the one-time catch-up for what already exists. Needs
-`SUPABASE_SERVICE_ROLE_KEY` and `VOYAGE_API_KEY` (reads `.env.local` if
-present). See the script's own header comment for the Voyage model /
+`SUPABASE_SERVICE_ROLE_KEY` and `OPENAI_API_KEY` (reads `.env.local` if
+present). See the script's own header comment for the embedding model /
 vector-dimension assumption it makes.
 
 ## GitHub ingestion
@@ -98,7 +98,7 @@ node scripts/ingest-github.mjs
 
 Safe to re-run (upserts on `repo, doc_type, path`). Needs `GITHUB_APP_ID`,
 `GITHUB_APP_PRIVATE_KEY`, and `GITHUB_INSTALLATION_ID` on top of the
-Supabase/Voyage keys the backfill script needs — see the script's own
+Supabase/OpenAI keys the backfill script needs — see the script's own
 header comment for what it does and doesn't cover yet (no incremental
 sync cursor, capped at 50 most-recent merged PRs per repo).
 
@@ -115,7 +115,7 @@ SQL Editor) and add the union branch before relying on this.
 | --- | --- |
 | `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Auth + reads from the browser and server |
 | `SUPABASE_SERVICE_ROLE_KEY` | `/api/ask`'s trusted `match_knowledge` calls |
-| `VOYAGE_API_KEY` | Embedding the question before retrieval |
+| `OPENAI_API_KEY` | Embedding the question before retrieval (was Voyage AI — switched after account-access problems) |
 | `ANTHROPIC_API_KEY` | Composing the answer from retrieved context |
 | `ALINA_MODEL` | Optional override for the answer model (default `claude-sonnet-5`) |
 | `GITHUB_APP_ID` / `GITHUB_APP_PRIVATE_KEY` / `GITHUB_INSTALLATION_ID` | `scripts/ingest-github.mjs`'s GitHub App auth |

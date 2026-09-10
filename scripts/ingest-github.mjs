@@ -2,7 +2,7 @@
 /**
  * Pulls README files, architecture-decision docs, every matching source
  * file, and merged-PR descriptions from every repo the Greater Inside
- * GitHub App is installed on, embeds them with Voyage AI, and upserts
+ * GitHub App is installed on, embeds them with OpenAI, and upserts
  * them into tech.github_docs so match_knowledge can search them from the
  * Tech workspace. Needs supabase/migrations/0003_github_code_files.sql
  * applied first — it adds the 'code_file' doc_type this script writes.
@@ -11,21 +11,24 @@
  *   node scripts/ingest-github.mjs
  *
  * Needs GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY, GITHUB_INSTALLATION_ID,
- * NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, and VOYAGE_API_KEY —
+ * NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, and OPENAI_API_KEY —
  * reads them from your shell env, or from .env.local if present (that file
  * is git-ignored; this script never touches the repo).
  *
  * Safe to re-run, and resumable per-file: it fetches every (repo,
  * doc_type, path) already in the database once at startup and skips
- * exactly those, so a run interrupted by a rate limit can pick back up
- * without re-spending requests on files it already finished — important
- * since this ingests full codebases now, not a small sample, and without
- * a Voyage payment method the free tier's 3-requests/minute cap makes a
- * full run take many, many retries. Merged PRs are still capped at the
- * most recent 50 per repo.
+ * exactly those, so a run interrupted mid-way can pick back up without
+ * re-spending requests on files it already finished — this ingests full
+ * codebases, not a small sample, so a large install can take several
+ * runs regardless of provider. Merged PRs are still capped at the most
+ * recent 50 per repo.
  *
- * Uses voyage-3 (1024-dim) — must match tech.github_docs.embedding's
- * column type (see supabase/migrations/0002_github_docs.sql).
+ * Uses text-embedding-3-small at 1024 dimensions — must match
+ * tech.github_docs.embedding's column type (see
+ * supabase/migrations/0002_github_docs.sql). Previously used Voyage AI;
+ * switched after persistent account-access problems. Any rows embedded
+ * under the old provider must be deleted and re-ingested — vectors from
+ * different embedding models aren't comparable to each other.
  */
 
 import { createClient } from "@supabase/supabase-js";
@@ -41,11 +44,12 @@ if (existsSync(".env.local")) {
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const VOYAGE_API_KEY = process.env.VOYAGE_API_KEY;
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const APP_ID = process.env.GITHUB_APP_ID;
 const INSTALLATION_ID = process.env.GITHUB_INSTALLATION_ID;
 const RAW_PRIVATE_KEY = process.env.GITHUB_APP_PRIVATE_KEY;
-const VOYAGE_MODEL = "voyage-3";
+const EMBEDDING_MODEL = "text-embedding-3-small";
+const EMBEDDING_DIMENSIONS = 1024;
 const MAX_INPUT_CHARS = 8000;
 const MAX_PRS_PER_REPO = 50;
 
@@ -54,17 +58,16 @@ const CODE_EXCLUDE_PATH = /(^|\/)(node_modules|dist|build|vendor|\.next|\.git)\/
 const MAX_CODE_FILE_CHARS = 200_000; // skip generated/vendored files far past what a hand-written source file looks like
 const CODE_CHUNK_CHARS = 3000;
 
-// Every Voyage call is a request against the (possibly still free-tier)
-// rate limit, so texts are grouped into batches under this size instead
-// of one call per repo — keeps each request reasonably sized and means a
-// large repo makes several separate, individually-resumable calls rather
-// than one all-or-nothing one.
+// Texts are grouped into batches under this size instead of one call per
+// repo — keeps each request reasonably sized and means a large repo makes
+// several separate, individually-resumable calls rather than one
+// all-or-nothing one.
 const EMBED_BATCH_CHAR_BUDGET = 20_000;
 
 const missing = [
   ["NEXT_PUBLIC_SUPABASE_URL", SUPABASE_URL],
   ["SUPABASE_SERVICE_ROLE_KEY", SERVICE_KEY],
-  ["VOYAGE_API_KEY", VOYAGE_API_KEY],
+  ["OPENAI_API_KEY", OPENAI_API_KEY],
   ["GITHUB_APP_ID", APP_ID],
   ["GITHUB_INSTALLATION_ID", INSTALLATION_ID],
   ["GITHUB_APP_PRIVATE_KEY", RAW_PRIVATE_KEY],
@@ -231,17 +234,17 @@ async function fetchMergedPRs(token, owner, repo) {
 }
 
 async function embedBatch(texts) {
-  const res = await fetch("https://api.voyageai.com/v1/embeddings", {
+  const res = await fetch("https://api.openai.com/v1/embeddings", {
     method: "POST",
-    headers: { Authorization: `Bearer ${VOYAGE_API_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ input: texts, model: VOYAGE_MODEL, input_type: "document" }),
+    headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ input: texts, model: EMBEDDING_MODEL, dimensions: EMBEDDING_DIMENSIONS }),
   });
-  if (!res.ok) throw new Error(`Voyage embeddings failed: ${res.status} ${await res.text().catch(() => "")}`);
+  if (!res.ok) throw new Error(`OpenAI embeddings failed: ${res.status} ${await res.text().catch(() => "")}`);
   const data = await res.json();
   return data.data.map((d) => d.embedding);
 }
 
-const keyOf = (repo, docType, path) => `${repo} ${docType} ${path}`;
+const keyOf = (repo, docType, path) => JSON.stringify([repo, docType, path]);
 
 async function fetchExistingKeys() {
   const keys = new Set();

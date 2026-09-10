@@ -1,6 +1,10 @@
 import type { WorkspaceId } from "@/lib/types";
 
-const VOYAGE_MODEL = "voyage-3";
+// Switched from Voyage AI after persistent account-access problems.
+// text-embedding-3-small's `dimensions` param is pinned to 1024 to match
+// the existing vector(1024) columns — no schema migration needed.
+const EMBEDDING_MODEL = "text-embedding-3-small";
+const EMBEDDING_DIMENSIONS = 1024;
 const ANSWER_MODEL = process.env.ALINA_MODEL || "claude-sonnet-5";
 
 /**
@@ -27,25 +31,25 @@ export interface KnowledgeMatch {
 }
 
 /**
- * Embeds a query with Voyage AI. Uses input_type "query" — match_knowledge's
- * stored rows are embedded with input_type "document" (see the backfill
- * script), which is Voyage's recommended asymmetric setup for retrieval and
- * measurably improves match quality over embedding both sides the same way.
+ * Embeds a query with OpenAI. Unlike Voyage, OpenAI's embedding models
+ * don't have a separate query/document mode — the same call shape embeds
+ * both sides, which is also what scripts/backfill-embeddings.mjs and
+ * scripts/ingest-github.mjs use for the stored rows.
  */
 export async function embedQuery(text: string): Promise<number[]> {
-  const apiKey = process.env.VOYAGE_API_KEY;
-  if (!apiKey) throw new Error("VOYAGE_API_KEY is not configured");
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error("OPENAI_API_KEY is not configured");
 
-  const res = await fetch("https://api.voyageai.com/v1/embeddings", {
+  const res = await fetch("https://api.openai.com/v1/embeddings", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ input: [text], model: VOYAGE_MODEL, input_type: "query" }),
+    body: JSON.stringify({ input: [text], model: EMBEDDING_MODEL, dimensions: EMBEDDING_DIMENSIONS }),
   });
 
-  if (!res.ok) throw new Error(`Voyage embedding request failed: ${res.status}`);
+  if (!res.ok) throw new Error(`OpenAI embedding request failed: ${res.status}`);
   const data = await res.json();
   return data.data[0].embedding;
 }

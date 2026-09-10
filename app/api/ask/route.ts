@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
     missing.push("SUPABASE_SERVICE_ROLE_KEY (or NEXT_PUBLIC_SUPABASE_ANON_KEY)");
   }
-  if (!process.env.VOYAGE_API_KEY) missing.push("VOYAGE_API_KEY");
+  if (!process.env.OPENAI_API_KEY) missing.push("OPENAI_API_KEY");
   if (!process.env.ANTHROPIC_API_KEY) missing.push("ANTHROPIC_API_KEY");
 
   if (missing.length > 0) {
