@@ -1,12 +1,13 @@
 "use client";
 
 import clsx from "clsx";
-import { MessagesSquare, Keyboard } from "lucide-react";
+import { MessagesSquare, Keyboard, FileText } from "lucide-react";
 import type { AskMode } from "@/lib/types";
 
 const OPTIONS: { id: AskMode; label: string; icon: typeof MessagesSquare }[] = [
   { id: "chat", label: "Chat", icon: MessagesSquare },
   { id: "typing", label: "Typing", icon: Keyboard },
+  { id: "report", label: "Report", icon: FileText },
 ];
 
 export function ModeToggle({

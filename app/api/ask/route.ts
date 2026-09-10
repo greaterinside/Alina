@@ -4,6 +4,7 @@ import { getCurrentIdentity } from "@/lib/identity";
 import {
   buildSystemPrompt,
   composeAnswer,
+  composeReport,
   embedQuery,
   getUserPersonalization,
   getWorkspaceTone,
@@ -38,14 +39,14 @@ function describeError(err: unknown): string {
 
 interface AskBody {
   workspace: WorkspaceId;
-  mode: "chat" | "typing";
+  mode: "chat" | "typing" | "report";
   message: string;
   history?: { role: "user" | "assistant"; content: string }[];
 }
 
 export async function POST(req: NextRequest) {
   const body = (await req.json()) as AskBody;
-  const { workspace, message, history = [] } = body;
+  const { workspace, mode, message, history = [] } = body;
 
   if (!workspace || !WORKSPACES[workspace] || !message?.trim()) {
     return NextResponse.json({ error: "workspace and message are required" }, { status: 400 });
@@ -91,6 +92,20 @@ export async function POST(req: NextRequest) {
       masterTone: tone?.system_prompt,
       personalNotes,
     });
+
+    if (mode === "report") {
+      const { title, summary, markdown } = await composeReport({
+        systemPrompt,
+        context: matches,
+        history: history.map((h) => ({ role: h.role, content: h.content })),
+        question: message,
+      });
+
+      return NextResponse.json({
+        content: summary,
+        report: { title, markdown },
+      });
+    }
 
     const content = await composeAnswer({
       systemPrompt,

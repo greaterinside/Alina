@@ -11,9 +11,10 @@ import { Composer } from "@/components/ask/Composer";
 import { MessageBubble } from "@/components/ask/MessageBubble";
 import { TypingAnswer } from "@/components/ask/TypingAnswer";
 import { EmptyState } from "@/components/ask/EmptyState";
+import { ReportPreviewPanel } from "@/components/ask/ReportPreviewPanel";
 import { useSpeech } from "@/lib/hooks/useSpeech";
 import { useVoiceInput } from "@/lib/hooks/useVoiceInput";
-import { WORKSPACES, type AskMode, type ChatMessage, type WorkspaceId } from "@/lib/types";
+import { WORKSPACES, type AskMode, type ChatMessage, type ReportDoc, type WorkspaceId } from "@/lib/types";
 
 let idCounter = 0;
 const nextId = () => `m${Date.now()}_${idCounter++}`;
@@ -44,6 +45,7 @@ export function AskScreen({
   const [loading, setLoading] = useState(false);
   const [autoSpeak, setAutoSpeak] = useState(false);
   const [justAnswered, setJustAnswered] = useState(false);
+  const [openReport, setOpenReport] = useState<ReportDoc | null>(null);
 
   const threadRef = useRef<HTMLDivElement>(null);
   const { speak, speaking, error: speechError, supported: speechSupported } = useSpeech();
@@ -103,6 +105,7 @@ export function AskScreen({
         content: data.content ?? "Something went wrong on my end — try that again?",
         citations: data.citations,
         provenance: data.provenance,
+        report: data.report,
         createdAt: new Date().toISOString(),
       };
       appendMessage(workspace, assistantMessage);
@@ -165,7 +168,7 @@ export function AskScreen({
         </div>
       </div>
 
-      {mode === "chat" ? (
+      {mode !== "typing" ? (
         <>
           <div ref={threadRef} className="flex-1 overflow-y-auto px-6 py-6">
             {messages.length === 0 ? (
@@ -173,7 +176,12 @@ export function AskScreen({
             ) : (
               <div className="mx-auto flex max-w-2xl flex-col gap-4">
                 {messages.map((m) => (
-                  <MessageBubble key={m.id} message={m} onSpeak={speechSupported ? speak : undefined} />
+                  <MessageBubble
+                    key={m.id}
+                    message={m}
+                    onSpeak={speechSupported ? speak : undefined}
+                    onPreviewReport={setOpenReport}
+                  />
                 ))}
                 {loading && <ThinkingBubble />}
               </div>
@@ -192,7 +200,11 @@ export function AskScreen({
                   value={input}
                   onChange={setInput}
                   onSubmit={() => send(input)}
-                  placeholder={`Ask ${WORKSPACES[workspace].name.toLowerCase() === "assistant" ? "Alina" : "about " + WORKSPACES[workspace].name.toLowerCase()}…`}
+                  placeholder={
+                    mode === "report"
+                      ? "Describe the report you need — a project recap, a status summary…"
+                      : `Ask ${WORKSPACES[workspace].name.toLowerCase() === "assistant" ? "Alina" : "about " + WORKSPACES[workspace].name.toLowerCase()}…`
+                  }
                   disabled={loading}
                   onMic={micSupported ? startMic : undefined}
                   micListening={listening}
@@ -240,6 +252,8 @@ export function AskScreen({
           </div>
         </>
       )}
+
+      <ReportPreviewPanel report={openReport} onClose={() => setOpenReport(null)} />
     </div>
   );
 }

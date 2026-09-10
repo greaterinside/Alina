@@ -170,3 +170,90 @@ export async function composeAnswer(opts: {
   }
   return text;
 }
+
+/**
+ * Same pipeline as composeAnswer, but asks for a full report instead of a
+ * short reply: a title, a two-sentence summary (shown as the chat message,
+ * same idea as Claude's artifact blurb), and the full report body as
+ * Markdown (rendered in a preview panel, exportable to .docx).
+ */
+export async function composeReport(opts: {
+  systemPrompt: string;
+  context: KnowledgeMatch[];
+  history: { role: "user" | "assistant"; content: string }[];
+  question: string;
+}): Promise<{ title: string; summary: string; markdown: string }> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not configured");
+
+  const contextBlock = opts.context
+    .map((c, i) => `[${i + 1}] (${SOURCE_LABELS[c.source_table] ?? c.source_table})\n${c.content_snippet}`)
+    .join("\n\n");
+
+  const reportInstructions = [
+    "The user is asking for a REPORT, not a quick chat reply.",
+    "Reply in exactly this format, with nothing before or after it:",
+    "TITLE: <a short, specific report title — plain text, no markdown>",
+    "SUMMARY: <exactly two plain sentences summarizing what the report covers — plain text, no markdown, this is shown as the chat message>",
+    "---",
+    "<the full report body as Markdown: use ## headings to break it into sections, plain paragraphs, bold, and bullet/numbered lists where useful. Don't repeat the title as a heading. Keep formatting simple — no tables, no nested lists.>",
+  ].join("\n");
+
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: ANSWER_MODEL,
+      max_tokens: 4096,
+      system: `${opts.systemPrompt}\n\n${reportInstructions}\n\nContext:\n${contextBlock}`,
+      messages: [...opts.history, { role: "user", content: opts.question }],
+    }),
+  });
+
+  if (!res.ok) throw new Error(`Report generation failed: ${res.status}`);
+  const data = await res.json();
+
+  const text = (data.content ?? [])
+    .filter((block: { type: string; text?: string }) => block.type === "text")
+    .map((block: { text?: string }) => block.text ?? "")
+    .join("\n")
+    .trim();
+
+  if (!text) {
+    console.error("[composeReport] no text block in response", JSON.stringify(data).slice(0, 500));
+    return {
+      title: "Report",
+      summary: "I found relevant context but couldn't put the report together — try rephrasing.",
+      markdown: "",
+    };
+  }
+
+  return parseReportResponse(text);
+}
+
+function parseReportResponse(text: string): { title: string; summary: string; markdown: string } {
+  const titleMatch = text.match(/^TITLE:\s*(.+)$/m);
+  const summaryMatch = text.match(/^SUMMARY:\s*([\s\S]*?)(?=\n---\n)/m);
+  const bodyMatch = text.match(/\n---\n([\s\S]*)$/);
+
+  if (titleMatch && summaryMatch && bodyMatch) {
+    return {
+      title: titleMatch[1].trim(),
+      summary: summaryMatch[1].trim().replace(/\s+/g, " "),
+      markdown: bodyMatch[1].trim(),
+    };
+  }
+
+  // The model didn't follow the TITLE/SUMMARY/--- format exactly — fall
+  // back to treating the whole reply as the report body rather than
+  // losing the content.
+  return {
+    title: "Report",
+    summary: "Here's the report — open the preview to see the full thing.",
+    markdown: text,
+  };
+}

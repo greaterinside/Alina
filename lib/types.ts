@@ -73,7 +73,7 @@ export interface SourceConnector {
   description: string;
 }
 
-export type AskMode = "chat" | "typing";
+export type AskMode = "chat" | "typing" | "report";
 
 export interface Citation {
   label: string;
@@ -86,12 +86,19 @@ export interface ProvenanceItem {
   meta: string;
 }
 
+/** A generated report — the chat message carries just the short summary; the full doc lives here. */
+export interface ReportDoc {
+  title: string;
+  markdown: string;
+}
+
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
   citations?: Citation[];
   provenance?: ProvenanceItem[];
+  report?: ReportDoc;
   createdAt: string;
 }
 
