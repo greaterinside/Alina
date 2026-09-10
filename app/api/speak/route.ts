@@ -3,7 +3,10 @@ import { NextRequest, NextResponse } from "next/server";
 // "Rachel" — a warm, clear default ElevenLabs voice. Override with
 // ELEVENLABS_VOICE_ID once a specific voice is picked for Alina.
 const DEFAULT_VOICE_ID = "21m00Tcm4TlvDq8ikWAM";
-const MODEL_ID = "eleven_turbo_v2_5";
+// eleven_turbo_v2_5 returned 402s even with free credits available and
+// the account confirmed to support free-tier API access — switched to
+// the standard multilingual model, which has broader plan availability.
+const MODEL_ID = "eleven_multilingual_v2";
 const MAX_TEXT_CHARS = 5000;
 
 export const runtime = "nodejs";
@@ -38,7 +41,10 @@ export async function POST(req: NextRequest) {
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
     console.error("[/api/speak]", res.status, detail);
-    return NextResponse.json({ error: `ElevenLabs request failed: ${res.status}` }, { status: 502 });
+    return NextResponse.json(
+      { error: `ElevenLabs request failed: ${res.status} ${detail.slice(0, 300)}` },
+      { status: 502 }
+    );
   }
 
   const audio = await res.arrayBuffer();
