@@ -17,7 +17,7 @@ export function TypingAnswer({
 
   async function copy() {
     try {
-      await navigator.clipboard.writeText(answer.content.replace(/\[cite:[^\]]+\]/g, ""));
+      await navigator.clipboard.writeText(answer.content);
       setCopied(true);
       setTimeout(() => setCopied(false), 1600);
     } catch {
@@ -31,22 +31,8 @@ export function TypingAnswer({
         {prompt.content}
       </p>
       <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-charcoal">
-        {answer.content.replace(/\[cite:[^\]]+\]/g, "").trim()}
+        {answer.content}
       </p>
-
-      {answer.provenance && answer.provenance.length > 0 && (
-        <div className="mt-4 rounded-2xl border border-navy/8 bg-offwhite px-3 py-2.5">
-          <p className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-wide text-navy/45">
-            Built from
-          </p>
-          {answer.provenance.map((p, i) => (
-            <p key={i} className="py-0.5 text-[12px] text-navy/70">
-              <span className="font-medium">{p.source}</span>{" "}
-              <span className="text-navy/50">· {p.title}</span>
-            </p>
-          ))}
-        </div>
-      )}
 
       <div className="mt-4 flex gap-2">
         <button

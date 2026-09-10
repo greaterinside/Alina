@@ -26,22 +26,8 @@ export function MessageBubble({
       <Mascot state="happy" size="sm" className="mt-0.5" />
       <div className="min-w-0 max-w-[80%] rounded-3xl rounded-tl-lg border border-navy/[0.07] bg-white px-4 py-3.5 shadow-card">
         <p className="whitespace-pre-wrap text-[14.5px] leading-relaxed text-charcoal">
-          {renderWithCitations(message.content)}
+          {message.content}
         </p>
-
-        {message.provenance && message.provenance.length > 0 && (
-          <div className="mt-3 rounded-2xl border border-navy/8 bg-offwhite px-3 py-2.5">
-            <p className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-wide text-navy/45">
-              Built from
-            </p>
-            {message.provenance.map((p, i) => (
-              <p key={i} className="flex items-center gap-1.5 py-0.5 text-[12px] text-navy/70">
-                <span className="font-medium">{p.source}</span>
-                <span className="truncate text-navy/50">· {p.title}</span>
-              </p>
-            ))}
-          </div>
-        )}
 
         {onSpeak && (
           <button
@@ -55,20 +41,4 @@ export function MessageBubble({
       </div>
     </div>
   );
-}
-
-function renderWithCitations(content: string) {
-  const parts = content.split(/(\[cite:[^\]]+\])/g);
-  return parts.map((part, i) => {
-    const match = part.match(/^\[cite:([^\]]+)\]$/);
-    if (!match) return <span key={i}>{part}</span>;
-    return (
-      <span
-        key={i}
-        className="mx-0.5 inline-flex items-center rounded-md bg-plum/10 px-1.5 py-0.5 align-middle text-[11px] font-medium text-plum"
-      >
-        {match[1]}
-      </span>
-    );
-  });
 }

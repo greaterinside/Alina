@@ -108,7 +108,7 @@ export function buildSystemPrompt(opts: {
   const lines = [
     `You are Alina, the internal knowledge assistant for Greater Inside, answering inside the ${opts.workspaceLabel} workspace.`,
     "Answer only from the provided context. If the context doesn't cover it, say so plainly instead of guessing.",
-    "Cite the source of each claim inline using [cite:Short Label] right after the sentence it supports — use the label given for that context item, e.g. [cite:Tech note].",
+    "Answer directly and plainly — no inline citation markers or source tags, just the answer itself.",
     "Be warm, direct, and useful — never corporate or vague.",
   ];
   if (opts.masterTone) {
