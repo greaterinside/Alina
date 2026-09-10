@@ -51,6 +51,15 @@ export async function embedQuery(text: string): Promise<number[]> {
 }
 
 /**
+ * match_knowledge itself has no relevance floor — it always returns its
+ * top match_count rows by similarity, even when the best one is barely
+ * related to the question (e.g. a repo that hasn't been ingested yet).
+ * Filtering here, rather than in the SQL function, means this can be
+ * tuned without another manual migration.
+ */
+const MIN_SIMILARITY = 0.3;
+
+/**
  * Calls the real public.match_knowledge(query_embedding, match_count,
  * workspace_filter) — returns RETURNS TABLE(source_table, source_id,
  * content_snippet, similarity). workspace_filter is 'tech' | 'social' |
@@ -69,7 +78,7 @@ export async function matchKnowledge(
     workspace_filter: workspace === "assistant" ? null : workspace,
   });
   if (error) throw error;
-  return data ?? [];
+  return (data ?? []).filter((m: KnowledgeMatch) => m.similarity >= MIN_SIMILARITY);
 }
 
 export async function getWorkspaceTone(supabase: any, workspace: WorkspaceId) {
