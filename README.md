@@ -137,6 +137,36 @@ content shows up in any Ask answer. Pull the function's current definition
 (`select pg_get_functiondef('public.match_knowledge'::regproc);` in the
 SQL Editor) and add the union branch before relying on this.
 
+## Fathom ingestion
+
+`social.fathom_calls` (see `supabase/migrations/0004_fathom_calls.sql`)
+holds call transcripts + AI summaries pulled from Fathom (fathom.video —
+the meeting notetaker; **not** usefathom.com, an unrelated analytics
+product with a confusingly similar name). This is what gives Ask
+plain-language product/customer context that code alone can't — code
+explains *what's built*, calls explain *what it means and why*.
+
+```bash
+node scripts/ingest-fathom.mjs
+```
+
+Needs `FATHOM_API_KEY` on top of the Supabase/OpenAI keys. Safe to re-run
+(upserts on `meeting_id, chunk_index`). **Unlike the GitHub script, this
+one wasn't written against docs I could actually load** — Fathom's docs
+domain wasn't reachable when this was built, so the field names it reads
+off each meeting (title, transcript, summary, url, recorded-at) are
+best-guess based on common API conventions, tried in priority order. The
+first run prints the raw shape of the first meeting it fetches — if the
+script logs 0 chunks ingested despite meetings existing, that printed
+JSON will show which field names to fix in `fetchAllMeetings()`.
+
+A Fathom API key only sees meetings its owner recorded or that were
+explicitly shared with them — not the whole team's calls automatically.
+
+Same `match_knowledge` caveat as GitHub above: add a
+`social.fathom_calls` branch to the function before this table's content
+shows up in Ask answers.
+
 ## Env vars
 
 | Var | Used for |
@@ -147,6 +177,7 @@ SQL Editor) and add the union branch before relying on this.
 | `ANTHROPIC_API_KEY` | Composing the answer from retrieved context |
 | `ALINA_MODEL` | Optional override for the answer model (default `claude-sonnet-5`) |
 | `GITHUB_APP_ID` / `GITHUB_APP_PRIVATE_KEY` / `GITHUB_INSTALLATION_ID` | `scripts/ingest-github.mjs`'s GitHub App auth |
+| `FATHOM_API_KEY` | `scripts/ingest-fathom.mjs`'s Fathom API auth |
 | `ELEVENLABS_API_KEY` | `/api/speak` — voice for "Hear this" / auto-speak |
 | `ELEVENLABS_VOICE_ID` | Optional — which ElevenLabs voice to use (defaults to a preset one) |
 
