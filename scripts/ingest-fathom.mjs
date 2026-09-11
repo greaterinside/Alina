@@ -137,6 +137,8 @@ async function fetchAllMeetings() {
     const data = await fathomFetch("/meetings", {
       include_transcript: "true",
       include_summary: "true",
+      include_action_items: "true",
+      include_highlights: "true",
       limit: PAGE_LIMIT,
       cursor,
     });
@@ -167,6 +169,8 @@ async function fetchAllMeetings() {
         recordedAt: pick(raw, "recording_start_time", "recorded_at", "scheduled_start_time", "created_at"),
         transcript: fieldToText(pick(raw, "transcript", "transcript_text")),
         summary: fieldToText(pick(raw, "summary", "ai_summary", "default_summary")),
+        actionItems: fieldToText(pick(raw, "action_items")),
+        highlights: fieldToText(pick(raw, "highlights")),
       });
     }
 
@@ -220,6 +224,20 @@ function chunkMeeting(meeting) {
   for (let i = 0; i < transcript.length; i += CHUNK_CHARS) {
     const piece = transcript.slice(i, i + CHUNK_CHARS);
     chunks.push(chunks.length === 0 ? `${meeting.title}\n\nTranscript:\n${piece}` : piece);
+  }
+  // Fathom's own AI-extracted action items/highlights, when present — more
+  // reliable than asking Claude to re-derive them from the raw transcript
+  // every time. Appended AFTER the transcript pieces (not interleaved
+  // earlier) on purpose: a meeting's transcript length — and so its chunk
+  // count — never changes between runs, so these two always land at fixed
+  // new index positions past the end for a given meeting. Putting them
+  // anywhere earlier would shift every later chunk_index on a re-run and
+  // duplicate rows instead of cleanly adding these two.
+  if (meeting.actionItems.trim()) {
+    chunks.push(`${meeting.title}\n\nAction items:\n${meeting.actionItems.trim()}`);
+  }
+  if (meeting.highlights.trim()) {
+    chunks.push(`${meeting.title}\n\nHighlights:\n${meeting.highlights.trim()}`);
   }
   return chunks;
 }
