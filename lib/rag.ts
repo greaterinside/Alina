@@ -225,8 +225,10 @@ const FATHOM_TOOLS = [
     description:
       "Find which recorded calls involved a specific person or company by name — for questions like " +
       "'who have I talked to' or 'what calls have I had with X'. Returns a real list, not a similarity " +
-      "guess. Do NOT use this to ask what was discussed on one already-identified call — use " +
-      "get_full_call for that instead.",
+      "guess. The account holder (whoever's asking, i.e. 'my calls') is already excluded from every " +
+      "call's participant list — they're on all of them by definition, so search for the OTHER party's " +
+      "name, never the account holder's own name. Do NOT use this to ask what was discussed on one " +
+      "already-identified call — use get_full_call for that instead.",
     input_schema: {
       type: "object",
       properties: { name: { type: "string", description: "Person or company name to search for" } },

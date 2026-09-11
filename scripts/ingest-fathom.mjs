@@ -94,12 +94,19 @@ function pick(obj, ...names) {
  * DEVELOPMENT LLC", only ever showed up as a transcript speaker label,
  * never as a calendar invitee). calendar_invitees is used only to fill in
  * anyone the transcript speakers didn't already cover.
+ *
+ * excludeName is the account owner who recorded the call (recorded_by) —
+ * confirmed against real data that this key's owner is on essentially
+ * every single call (they're the one recording), which makes their own
+ * name useless noise as a "who else was on this call" signal, not a
+ * useful disambiguator. Excluded so `participants` actually answers "who
+ * ELSE was on this call," which is the thing worth searching by.
  */
-function extractParticipants(transcriptTurns, calendarInvitees) {
+function extractParticipants(transcriptTurns, calendarInvitees, excludeName) {
   const names = [];
   const seen = new Set();
   const add = (name) => {
-    if (name && !seen.has(name)) {
+    if (name && name !== excludeName && !seen.has(name)) {
       seen.add(name);
       names.push(name);
     }
@@ -216,7 +223,11 @@ async function fetchAllMeetings() {
         // prefer share_url for anything a person might actually click.
         url: pick(raw, "share_url", "url", "recording_url"),
         recordedAt: pick(raw, "recording_start_time", "recorded_at", "scheduled_start_time", "created_at"),
-        participants: extractParticipants(rawTranscript, pick(raw, "calendar_invitees")),
+        participants: extractParticipants(
+          rawTranscript,
+          pick(raw, "calendar_invitees"),
+          pick(raw, "recorded_by")?.name
+        ),
         transcript: fieldToText(rawTranscript),
         summary: fieldToText(pick(raw, "summary", "ai_summary", "default_summary")),
         actionItems: fieldToText(pick(raw, "action_items")),
