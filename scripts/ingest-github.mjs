@@ -36,7 +36,11 @@ import { readFileSync, existsSync } from "node:fs";
 import { createSign } from "node:crypto";
 
 if (existsSync(".env.local")) {
-  for (const line of readFileSync(".env.local", "utf8").split("\n")) {
+  for (const rawLine of readFileSync(".env.local", "utf8").split("\n")) {
+    // Strip a trailing \r — Windows-written files (or the last line after a
+    // tool appends a platform-default line ending) can leave one only on
+    // some lines, which silently breaks just that line's match below.
+    const line = rawLine.replace(/\r$/, "");
     const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
     if (m && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^["']|["']$/g, "");
   }
