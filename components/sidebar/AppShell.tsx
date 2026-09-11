@@ -22,7 +22,7 @@ export function AppShell({
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <div className="flex h-screen w-full gap-3 overflow-hidden bg-[#E9E9E6] p-3">
+    <div className="flex h-screen w-full gap-3 overflow-hidden bg-[#1f1f1f] p-3">
       <Sidebar
         identity={identity}
         mobileOpen={mobileOpen}
@@ -45,7 +45,7 @@ export function AppShell({
           >
             <Menu size={17} />
           </button>
-          <GreaterInsideLogo variant="dark" size={11} />
+          <GreaterInsideLogo variant="light" size={11} />
         </div>
 
         <main className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl bg-offwhite shadow-soft">
