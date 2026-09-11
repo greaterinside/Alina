@@ -66,6 +66,16 @@ export async function embedQuery(text: string): Promise<number[]> {
 const MIN_SIMILARITY = 0.3;
 
 /**
+ * A past Alina answer (public.conversation_memory) is a weaker source
+ * than a real doc/call/ticket — it's Alina's own prior output, not
+ * independent evidence, so a loosely-related one is worse than none:
+ * it risks the model treating its own earlier (possibly wrong) answer
+ * as confirmation. Held to a stricter bar than everything else.
+ */
+const MIN_SIMILARITY_PAST_ANSWER = 0.5;
+const PAST_ANSWER_SOURCE = "public.conversation_memory";
+
+/**
  * Calls the real public.match_knowledge(query_embedding, match_count,
  * workspace_filter) — returns RETURNS TABLE(source_table, source_id,
  * content_snippet, similarity). workspace_filter is 'tech' | 'social' |
@@ -84,7 +94,10 @@ export async function matchKnowledge(
     workspace_filter: workspace === "assistant" ? null : workspace,
   });
   if (error) throw error;
-  return (data ?? []).filter((m: KnowledgeMatch) => m.similarity >= MIN_SIMILARITY);
+  return (data ?? []).filter((m: KnowledgeMatch) => {
+    const floor = m.source_table === PAST_ANSWER_SOURCE ? MIN_SIMILARITY_PAST_ANSWER : MIN_SIMILARITY;
+    return m.similarity >= floor;
+  });
 }
 
 export async function getWorkspaceTone(supabase: any, workspace: WorkspaceId) {
@@ -123,7 +136,31 @@ export function buildSystemPrompt(opts: {
   if (opts.personalNotes) {
     lines.push(`This teammate's personal preferences (layered on top of the house tone, never overriding facts): ${opts.personalNotes}`);
   }
+  lines.push(
+    "Some context items are labeled \"Past answer — verify, don't treat as independent fact\": that's " +
+      "something Alina said before, not a real doc/call/ticket. Use it for continuity and tone, but if it " +
+      "conflicts with what the other sources actually say, trust the other sources — never let a past " +
+      "answer confirm itself."
+  );
   return lines.join("\n");
+}
+
+/**
+ * Shared by composeAnswer and composeReport. Past-answer context
+ * (public.conversation_memory) is tagged distinctly rather than blended
+ * in as if it were an independent source — see the matching instruction
+ * in buildSystemPrompt above. Without this the model can't tell "a real
+ * doc says X" apart from "I said X before," which risks a wrong answer
+ * getting retrieved as its own confirmation on a similar future question.
+ */
+function formatContextBlock(context: KnowledgeMatch[]): string {
+  return context
+    .map((c, i) => {
+      const label = SOURCE_LABELS[c.source_table] ?? c.source_table;
+      const tag = c.source_table === PAST_ANSWER_SOURCE ? `${label} — verify, don't treat as independent fact` : label;
+      return `[${i + 1}] (${tag})\n${c.content_snippet}`;
+    })
+    .join("\n\n");
 }
 
 export async function composeAnswer(opts: {
@@ -135,9 +172,7 @@ export async function composeAnswer(opts: {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not configured");
 
-  const contextBlock = opts.context
-    .map((c, i) => `[${i + 1}] (${SOURCE_LABELS[c.source_table] ?? c.source_table})\n${c.content_snippet}`)
-    .join("\n\n");
+  const contextBlock = formatContextBlock(opts.context);
 
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -188,9 +223,7 @@ export async function composeReport(opts: {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not configured");
 
-  const contextBlock = opts.context
-    .map((c, i) => `[${i + 1}] (${SOURCE_LABELS[c.source_table] ?? c.source_table})\n${c.content_snippet}`)
-    .join("\n\n");
+  const contextBlock = formatContextBlock(opts.context);
 
   const reportInstructions = [
     "The user is asking for a REPORT, not a quick chat reply.",

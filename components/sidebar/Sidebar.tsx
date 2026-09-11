@@ -12,11 +12,13 @@ import {
   ChevronRight,
   Sparkles,
   LogOut,
+  Brain,
 } from "lucide-react";
 import clsx from "clsx";
 import type { Identity } from "@/lib/identity";
 import { canSeeAdminSections, WORKSPACE_ORDER, WORKSPACES } from "@/lib/types";
 import { GreaterInsideLogo, GreaterInsideMark } from "@/components/branding/GreaterInsideLogo";
+import { MemoryPanel } from "@/components/memory/MemoryPanel";
 
 const NAV = [
   { href: "/ask", label: "Ask", icon: MessageCircleHeart, admin: false },
@@ -43,6 +45,7 @@ export function Sidebar({
   const items = NAV.filter((item) => !item.admin || showAdmin);
 
   const [collapsed, setCollapsed] = useState(false);
+  const [memoryOpen, setMemoryOpen] = useState(false);
   useEffect(() => {
     try {
       if (localStorage.getItem(COLLAPSE_KEY) === "1") setCollapsed(true);
@@ -210,16 +213,27 @@ export function Sidebar({
           </div>
         )}
         {!identity.isDemo && (
-          <form action="/auth/signout" method="POST" title="Sign out">
+          <>
             <button
-              type="submit"
+              onClick={() => setMemoryOpen(true)}
+              title="What Alina remembers about you"
               className="grid h-7 w-7 flex-none place-items-center rounded-lg text-white/50 transition-colors hover:bg-white/10 hover:text-white"
             >
-              <LogOut size={14} />
+              <Brain size={14} />
             </button>
-          </form>
+            <form action="/auth/signout" method="POST" title="Sign out">
+              <button
+                type="submit"
+                className="grid h-7 w-7 flex-none place-items-center rounded-lg text-white/50 transition-colors hover:bg-white/10 hover:text-white"
+              >
+                <LogOut size={14} />
+              </button>
+            </form>
+          </>
         )}
       </div>
+
+      {memoryOpen && <MemoryPanel onClose={() => setMemoryOpen(false)} />}
       </div>
     </aside>
   );
