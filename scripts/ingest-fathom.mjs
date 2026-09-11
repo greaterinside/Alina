@@ -164,7 +164,7 @@ async function fetchAllMeetings() {
         id: String(id),
         title: pick(raw, "title", "meeting_title", "name") ?? "Untitled call",
         url: pick(raw, "url", "share_url", "recording_url"),
-        recordedAt: pick(raw, "recorded_at", "scheduled_start_time", "created_at"),
+        recordedAt: pick(raw, "recording_start_time", "recorded_at", "scheduled_start_time", "created_at"),
         transcript: fieldToText(pick(raw, "transcript", "transcript_text")),
         summary: fieldToText(pick(raw, "summary", "ai_summary", "default_summary")),
       });
