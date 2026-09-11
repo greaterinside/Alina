@@ -238,6 +238,30 @@ export async function listRecentFathomCalls(
 }
 
 /**
+ * Every call's short digest (summary, or a bounded excerpt when Fathom
+ * gave no summary) in a date range, most recent first — for "themes
+ * across my calls this quarter" style questions that need a pass over
+ * MANY calls at once. Deliberately NOT full transcripts: pulling those
+ * one by one for a whole quarter would blow the tool-iteration cap and
+ * the context window on detail the question never asked for.
+ */
+export async function getFathomCallSummaries(
+  supabase: any,
+  sinceDate?: string,
+  untilDate?: string
+): Promise<{ title: string; call_url: string | null; recorded_at: string | null; participants: string[]; summary: string }[]> {
+  const { data, error } = await supabase.rpc("get_fathom_call_summaries", {
+    since_date: sinceDate ?? null,
+    until_date: untilDate ?? null,
+  });
+  if (error) {
+    console.error("[getFathomCallSummaries]", error.message);
+    return [];
+  }
+  return data ?? [];
+}
+
+/**
  * Tools given to Claude alongside the similarity-search context — an
  * escape hatch for exactly the question shapes similarity search can't
  * answer: "list every call with X" and "give me everything from this
@@ -310,6 +334,23 @@ const FATHOM_TOOLS = [
       },
     },
   },
+  {
+    name: "get_call_summaries_in_range",
+    description:
+      "Get a short digest (summary, participants, date) of EVERY call in a date range — for questions that need " +
+      "to reason across MANY calls at once, like 'recurring themes across my calls this quarter' or 'what concerns " +
+      "keep coming up.' Use today's date (given above) to work out the actual range for phrases like 'this quarter' " +
+      "or 'this month'. Do NOT call get_full_call in a loop for this kind of question — that pulls full transcripts " +
+      "one at a time and will run out of lookups before covering a whole quarter. Only fall back to get_full_call " +
+      "afterward, and only for one or two specific calls this turns up that need more than the summary gives you.",
+    input_schema: {
+      type: "object",
+      properties: {
+        since: { type: "string", description: "Optional ISO date (YYYY-MM-DD) — only calls on or after this date." },
+        until: { type: "string", description: "Optional ISO date (YYYY-MM-DD) — only calls on or before this date." },
+      },
+    },
+  },
 ];
 
 async function runFathomTool(supabase: any, name: string, input: Record<string, unknown>): Promise<string> {
@@ -333,6 +374,21 @@ async function runFathomTool(supabase: any, name: string, input: Record<string, 
         return `- ${r.title ?? "Untitled call"} (${date})${who}${r.call_url ? ` — ${r.call_url}` : ""}`;
       })
       .join("\n");
+  }
+  if (name === "get_call_summaries_in_range") {
+    const rows = await getFathomCallSummaries(
+      supabase,
+      input.since ? String(input.since) : undefined,
+      input.until ? String(input.until) : undefined
+    );
+    if (rows.length === 0) return "No calls found in that range.";
+    return rows
+      .map((r) => {
+        const date = r.recorded_at ? new Date(r.recorded_at).toISOString().slice(0, 10) : "unknown date";
+        const who = r.participants.length > 0 ? ` with ${r.participants.join(", ")}` : "";
+        return `=== ${r.title ?? "Untitled call"} (${date})${who} ===\n${r.summary}`;
+      })
+      .join("\n\n");
   }
   if (name === "get_full_call") {
     const rows = await getFathomCallContent(
@@ -394,13 +450,30 @@ async function callAnthropicWithTools(opts: {
     return res.json();
   }
 
+  // Forces one final plain-text answer (tools dropped, so it can't ask for
+  // yet another lookup) instead of surfacing an empty response to the user
+  // — used both when the iteration cap runs out mid-investigation AND when
+  // a turn comes back with stop_reason "end_turn"/no tool call but somehow
+  // no text either (seen in practice: a broad question, e.g. "themes across
+  // this quarter," that stalls without producing visible output).
+  const forceTextAnswer = () =>
+    callAnthropic(
+      false,
+      "Answer now in plain text from whatever you've already found — don't leave the reply empty, and say " +
+        "plainly if something specific is still unconfirmed rather than leaving it out silently."
+    );
+
   for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
     data = await callAnthropic(true);
 
-    if (data.stop_reason !== "tool_use" || !opts.supabase) return data;
+    if (data.stop_reason !== "tool_use" || !opts.supabase) {
+      return extractText(data) ? data : forceTextAnswer();
+    }
 
     const toolUseBlocks = (data.content ?? []).filter((b: { type: string }) => b.type === "tool_use");
-    if (toolUseBlocks.length === 0) return data;
+    if (toolUseBlocks.length === 0) {
+      return extractText(data) ? data : forceTextAnswer();
+    }
 
     messages.push({ role: "assistant", content: data.content });
     const toolResults = await Promise.all(
@@ -415,15 +488,8 @@ async function callAnthropicWithTools(opts: {
 
   // Ran out of lookup attempts while Claude was still mid-investigation
   // (a multi-part question — several names, a date — can genuinely need
-  // more round trips than the cap above). Rather than surface an empty,
-  // unhelpful fallback, force one final answer from whatever it's already
-  // gathered by dropping `tools` from this last call so it can't ask for
-  // yet another lookup it won't get to run.
-  return callAnthropic(
-    false,
-    "You've done as much lookup as you can for this turn — answer now from whatever you've already " +
-      "found, and say plainly if something specific is still unconfirmed rather than leaving it out silently."
-  );
+  // more round trips than the cap above).
+  return forceTextAnswer();
 }
 
 /** Anthropic's response can include non-text blocks (e.g. thinking) ahead of the actual answer. */
