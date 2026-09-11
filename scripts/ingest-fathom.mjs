@@ -92,10 +92,15 @@ function fieldToText(value) {
   if (typeof value === "string") return value;
   if (Array.isArray(value)) {
     if (value.length > 0 && typeof value[0] === "object" && value[0] !== null && "text" in value[0]) {
+      // Transcript turns have a speaker; action items/highlights (same
+      // {text}-shaped array convention) likely won't — only prefix a
+      // speaker name when one's actually there instead of always
+      // printing "Unknown:" on items that were never speaker-attributed.
       return value
         .map((turn) => {
-          const speaker = turn?.speaker?.display_name ?? turn?.speaker ?? "Unknown";
-          return turn.text ? `${speaker}: ${turn.text}` : "";
+          const speaker = turn?.speaker?.display_name ?? (typeof turn?.speaker === "string" ? turn.speaker : null);
+          if (!turn.text) return "";
+          return speaker ? `${speaker}: ${turn.text}` : turn.text;
         })
         .filter(Boolean)
         .join("\n");
@@ -150,7 +155,9 @@ async function fetchAllMeetings() {
       console.log("  top-level keys:", Object.keys(page[0]).join(", "));
       for (const [k, v] of Object.entries(page[0])) {
         const preview = Array.isArray(v)
-          ? `array(${v.length}), first item: ${JSON.stringify(v[0]).slice(0, 180)}`
+          ? v.length > 0
+            ? `array(${v.length}), first item: ${JSON.stringify(v[0]).slice(0, 180)}`
+            : "array(0), empty"
           : typeof v === "object" && v !== null
           ? JSON.stringify(v).slice(0, 180)
           : String(v).slice(0, 180);
