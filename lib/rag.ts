@@ -126,6 +126,9 @@ export function buildSystemPrompt(opts: {
 }) {
   const lines = [
     `You are Alina, the internal knowledge assistant for Greater Inside, answering inside the ${opts.workspaceLabel} workspace.`,
+    // Without this, relative dates ("this month," "recently," "last week")
+    // are unanswerable — the model has no other way to know what "now" is.
+    `Today's date is ${new Date().toISOString().slice(0, 10)}.`,
     "Answer only from the provided context. If the context doesn't cover it, say so plainly instead of guessing.",
     "Answer directly and plainly — no inline citation markers or source tags, just the answer itself.",
     "Be warm, direct, and useful — never corporate or vague.",
@@ -212,6 +215,25 @@ export async function getFathomCallContent(
 }
 
 /**
+ * Every call, most recent first, optionally since a given date — for
+ * "what calls have I had this month" / "catch me up on recent calls,"
+ * which aren't about any one specific person. Genuinely didn't exist
+ * until a real question exposed the gap: list_calls_by_participant only
+ * searches BY a name, it can't just browse chronologically.
+ */
+export async function listRecentFathomCalls(
+  supabase: any,
+  sinceDate?: string
+): Promise<{ title: string; call_url: string | null; recorded_at: string | null; participants: string[] }[]> {
+  const { data, error } = await supabase.rpc("list_recent_fathom_calls", { since_date: sinceDate ?? null });
+  if (error) {
+    console.error("[listRecentFathomCalls]", error.message);
+    return [];
+  }
+  return data ?? [];
+}
+
+/**
  * Tools given to Claude alongside the similarity-search context — an
  * escape hatch for exactly the question shapes similarity search can't
  * answer: "list every call with X" and "give me everything from this
@@ -260,6 +282,24 @@ const FATHOM_TOOLS = [
       required: ["title"],
     },
   },
+  {
+    name: "list_recent_calls",
+    description:
+      "Browse calls chronologically, most recent first — for 'what calls have I had this month/week/recently' " +
+      "or 'catch me up' style questions that aren't about any one specific person. Use today's date (given " +
+      "above) to work out the actual cutoff date for relative phrases like 'this month' or 'this week' and " +
+      "pass it as since. Do NOT use this for 'what calls have I had with X' — use list_calls_by_participant " +
+      "for that instead, since this just lists everything in order, unfiltered by who was on it.",
+    input_schema: {
+      type: "object",
+      properties: {
+        since: {
+          type: "string",
+          description: "Optional ISO date (YYYY-MM-DD) — only calls on or after this date. Omit to get the most recent calls overall.",
+        },
+      },
+    },
+  },
 ];
 
 async function runFathomTool(supabase: any, name: string, input: Record<string, unknown>): Promise<string> {
@@ -270,6 +310,17 @@ async function runFathomTool(supabase: any, name: string, input: Record<string, 
       .map((r) => {
         const date = r.recorded_at ? new Date(r.recorded_at).toISOString().slice(0, 10) : "unknown date";
         return `- ${r.title ?? "Untitled call"} (${date})${r.call_url ? ` — ${r.call_url}` : ""}`;
+      })
+      .join("\n");
+  }
+  if (name === "list_recent_calls") {
+    const rows = await listRecentFathomCalls(supabase, input.since ? String(input.since) : undefined);
+    if (rows.length === 0) return "No calls found in that range.";
+    return rows
+      .map((r) => {
+        const date = r.recorded_at ? new Date(r.recorded_at).toISOString().slice(0, 10) : "unknown date";
+        const who = r.participants.length > 0 ? ` with ${r.participants.join(", ")}` : "";
+        return `- ${r.title ?? "Untitled call"} (${date})${who}${r.call_url ? ` — ${r.call_url}` : ""}`;
       })
       .join("\n");
   }
