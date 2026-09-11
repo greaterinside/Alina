@@ -18,6 +18,13 @@ import {
 import { WORKSPACES, type WorkspaceId } from "@/lib/types";
 
 export const runtime = "nodejs";
+// Without this, Vercel kills the function after its plan default (as low as
+// 10s) — nowhere near enough for a hard question that needs several rounds
+// of tool calls plus a 16000-token answer budget, all non-streaming (the
+// whole answer has to finish generating before anything goes back to the
+// browser). Actual duration is capped by whatever your plan allows even if
+// it's lower than this.
+export const maxDuration = 300;
 
 /**
  * Supabase/Postgrest errors (and some fetch failures) are plain objects,
