@@ -517,7 +517,17 @@ export async function composeAnswer(opts: {
     apiKey,
     system: `${opts.systemPrompt}\n\nContext:\n${contextBlock}`,
     messages: [...opts.history, { role: "user", content: opts.question }],
-    maxTokens: 1024,
+    // Was 1024 — far too tight for this model. Sonnet 5 runs adaptive
+    // extended thinking by default even without a `thinking` param, and
+    // thinking tokens draw from this same budget: a hard question (rank
+    // themes across many calls, tally frequency, etc.) could burn the
+    // whole 1024 on invisible reasoning and hit max_tokens before ever
+    // starting the visible answer — content with a `thinking` block and
+    // no `text` block, exactly the "no text block in response" failures
+    // seen in practice. 16000 matches Anthropic's own non-streaming
+    // default; it's a ceiling, not a cost — actual usage scales with the
+    // question.
+    maxTokens: 16000,
     supabase: opts.supabase,
   });
 
@@ -563,7 +573,10 @@ export async function composeReport(opts: {
     apiKey,
     system: `${opts.systemPrompt}\n\n${reportInstructions}\n\nContext:\n${contextBlock}`,
     messages: [...opts.history, { role: "user", content: opts.question }],
-    maxTokens: 4096,
+    // Same reasoning as composeAnswer's 16000 — a full report needs even
+    // more room than a chat answer for adaptive thinking plus the actual
+    // markdown body.
+    maxTokens: 16000,
     supabase: opts.supabase,
   });
 
@@ -631,7 +644,16 @@ export async function extractPersonalFact(message: string): Promise<string | nul
       },
       body: JSON.stringify({
         model: ANSWER_MODEL,
-        max_tokens: 100,
+        // Was 100 — same failure mode as composeAnswer's old 1024: this
+        // model runs adaptive thinking by default with no `thinking` param
+        // needed to trigger it, and thinking tokens share this budget.
+        // 100 left no room for both, so a message that made the model
+        // think even briefly before classifying could silently burn the
+        // whole budget and come back with zero text — indistinguishable
+        // here from a genuine "no fact found" NONE. effort: "low" keeps
+        // thinking shallow for what's a simple classification call.
+        max_tokens: 512,
+        output_config: { effort: "low" },
         system:
           "You extract lasting personal facts or preferences from a single message — the kind worth " +
           "remembering across future conversations (their role, how they like answers phrased or " +
