@@ -4,8 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Volume2, VolumeX, Trash2 } from "lucide-react";
 import clsx from "clsx";
-import type { MascotState } from "@/components/mascot/Mascot";
-import { ParticlePresence } from "@/components/mascot/ParticlePresence";
+import { ParticleField } from "@/components/mascot/ParticleField";
 import { WorkspaceTabs } from "@/components/ask/WorkspaceTabs";
 import { ModeToggle } from "@/components/ask/ModeToggle";
 import { Composer } from "@/components/ask/Composer";
@@ -46,26 +45,17 @@ export function AskScreen({
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [autoSpeak, setAutoSpeak] = useState(false);
-  const [justAnswered, setJustAnswered] = useState(false);
   const [openReport, setOpenReport] = useState<ReportDoc | null>(null);
   const [loadedWorkspaces, setLoadedWorkspaces] = useState<Set<WorkspaceId>>(new Set());
   const [historyLoading, setHistoryLoading] = useState(false);
 
   const threadRef = useRef<HTMLDivElement>(null);
-  const { speak, speaking, error: speechError, supported: speechSupported } = useSpeech();
+  const { speak, error: speechError, supported: speechSupported } = useSpeech();
   const { start: startMic, listening, supported: micSupported } = useVoiceInput((text) =>
     setInput((prev) => (prev ? `${prev} ${text}` : text))
   );
 
   const messages = messagesByWs[workspace] ?? [];
-
-  const mascotState: MascotState = loading
-    ? "thinking"
-    : speaking
-    ? "speaking"
-    : justAnswered
-    ? "happy"
-    : "idle";
 
   useEffect(() => {
     threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight, behavior: "smooth" });
@@ -164,7 +154,6 @@ export function AskScreen({
     appendMessage(workspace, userMessage);
     setInput("");
     setLoading(true);
-    setJustAnswered(false);
 
     try {
       const res = await fetch("/api/ask", {
@@ -189,8 +178,6 @@ export function AskScreen({
         createdAt: new Date().toISOString(),
       };
       appendMessage(workspace, assistantMessage);
-      setJustAnswered(true);
-      setTimeout(() => setJustAnswered(false), 2400);
       if (autoSpeak) speak(assistantMessage.content.replace(/\[cite:[^\]]+\]/g, ""));
     } catch {
       appendMessage(workspace, {
@@ -219,26 +206,30 @@ export function AskScreen({
   }, [messages]);
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="relative flex h-full flex-col overflow-hidden bg-[#05050f]">
+      <ParticleField />
+      <div className="relative z-10 flex h-full flex-col">
       {deniedWorkspace && (
-        <div className="flex-none border-b border-terracotta/20 bg-terracotta/10 px-6 py-2.5 text-[12.5px] text-terracotta">
+        <div className="flex-none border-b border-terracotta/25 bg-terracotta/15 px-6 py-2.5 text-[12.5px] text-[#ffb088]">
           Oops — you don&apos;t have access to {WORKSPACES[deniedWorkspace].name}. Showing{" "}
           {WORKSPACES[workspace].name} instead. Ask an admin on the Team page if you need it.
         </div>
       )}
-      <div className="flex flex-none flex-wrap items-center gap-3 border-b border-navy/8 px-6 py-4">
+      <div className="flex flex-none flex-wrap items-center gap-3 border-b border-white/10 px-6 py-4">
         <WorkspaceTabs allowed={allowedWorkspaces} active={workspace} onChange={setWorkspace} />
-        <span className="pill-tag hidden sm:inline-flex">Tone: {WORKSPACES[workspace].toneHint}</span>
+        <span className="glass-pill hidden px-3 py-1 text-xs font-medium text-white/70 sm:inline-flex">
+          Tone: {WORKSPACES[workspace].toneHint}
+        </span>
         <div className="ml-auto flex items-center gap-2">
           {speechSupported && (
             <button
               onClick={() => setAutoSpeak((v) => !v)}
               title={autoSpeak ? "Alina will read answers out loud" : "Turn on voice replies"}
               className={clsx(
-                "grid h-9 w-9 place-items-center rounded-2xl border transition-colors",
+                "grid h-9 w-9 place-items-center rounded-2xl border backdrop-blur-xl transition-colors",
                 autoSpeak
-                  ? "border-terracotta/40 bg-terracotta/10 text-terracotta"
-                  : "border-navy/10 text-navy/50 hover:text-navy"
+                  ? "border-terracotta/50 bg-terracotta/15 text-[#ffb088]"
+                  : "border-white/12 text-white/50 hover:text-white"
               )}
             >
               {autoSpeak ? <Volume2 size={16} /> : <VolumeX size={16} />}
@@ -248,7 +239,7 @@ export function AskScreen({
             <button
               onClick={clearChatHistory}
               title={`Clear your ${WORKSPACES[workspace].name} conversation`}
-              className="grid h-9 w-9 place-items-center rounded-2xl border border-navy/10 text-navy/50 transition-colors hover:border-terracotta/30 hover:text-terracotta"
+              className="grid h-9 w-9 place-items-center rounded-2xl border border-white/12 text-white/50 backdrop-blur-xl transition-colors hover:border-terracotta/40 hover:text-[#ffb088]"
             >
               <Trash2 size={16} />
             </button>
@@ -278,28 +269,25 @@ export function AskScreen({
           </div>
           <div className="flex-none px-6 pb-6 pt-2">
             {speechError && (
-              <div className="mx-auto mb-2 flex max-w-2xl items-center justify-between rounded-2xl border border-terracotta/25 bg-terracotta/10 px-3.5 py-2 text-[12.5px] text-terracotta">
+              <div className="glass-panel mx-auto mb-2 flex max-w-2xl items-center justify-between px-3.5 py-2 text-[12.5px] text-[#ffb088]">
                 <span>Couldn&apos;t play voice: {speechError}</span>
               </div>
             )}
-            <div className="mx-auto flex max-w-2xl items-end gap-3">
-              <ParticlePresence state={mascotState} size="md" className="mb-1 hidden sm:block" />
-              <div className="flex-1">
-                <Composer
-                  value={input}
-                  onChange={setInput}
-                  onSubmit={() => send(input)}
-                  placeholder={
-                    mode === "report"
-                      ? "Describe the report you need — a project recap, a status summary…"
-                      : `Ask ${WORKSPACES[workspace].name.toLowerCase() === "assistant" ? "Alina" : "about " + WORKSPACES[workspace].name.toLowerCase()}…`
-                  }
-                  disabled={loading}
-                  onMic={micSupported ? startMic : undefined}
-                  micListening={listening}
-                  micSupported={micSupported}
-                />
-              </div>
+            <div className="mx-auto max-w-2xl">
+              <Composer
+                value={input}
+                onChange={setInput}
+                onSubmit={() => send(input)}
+                placeholder={
+                  mode === "report"
+                    ? "Describe the report you need — a project recap, a status summary…"
+                    : `Ask ${WORKSPACES[workspace].name.toLowerCase() === "assistant" ? "Alina" : "about " + WORKSPACES[workspace].name.toLowerCase()}…`
+                }
+                disabled={loading}
+                onMic={micSupported ? startMic : undefined}
+                micListening={listening}
+                micSupported={micSupported}
+              />
             </div>
           </div>
         </>
@@ -319,9 +307,9 @@ export function AskScreen({
                   />
                 ))}
                 {loading && (
-                  <div className="card-chunky flex items-center gap-3 p-5">
-                    <ParticlePresence state="thinking" size="sm" />
-                    <p className="text-[13.5px] text-navy/50">Drafting, one second…</p>
+                  <div className="glass-panel flex items-center gap-3 p-5">
+                    <DotLoader />
+                    <p className="text-[13.5px] text-white/60">Drafting, one second…</p>
                   </div>
                 )}
               </div>
@@ -343,18 +331,27 @@ export function AskScreen({
       )}
 
       <ReportPreviewPanel report={openReport} onClose={() => setOpenReport(null)} />
+      </div>
+    </div>
+  );
+}
+
+function DotLoader() {
+  return (
+    <div className="flex items-center gap-1">
+      <span className="h-1.5 w-1.5 animate-blink rounded-full bg-white/50 [animation-delay:0ms]" />
+      <span className="h-1.5 w-1.5 animate-blink rounded-full bg-white/50 [animation-delay:150ms]" />
+      <span className="h-1.5 w-1.5 animate-blink rounded-full bg-white/50 [animation-delay:300ms]" />
     </div>
   );
 }
 
 function ThinkingBubble() {
   return (
-    <div className="flex items-start gap-3">
-      <ParticlePresence state="thinking" size="sm" />
-      <div className="flex items-center gap-1 rounded-3xl rounded-tl-lg border border-navy/[0.07] bg-white px-4 py-3.5 shadow-card">
-        <span className="h-1.5 w-1.5 animate-blink rounded-full bg-navy/40 [animation-delay:0ms]" />
-        <span className="h-1.5 w-1.5 animate-blink rounded-full bg-navy/40 [animation-delay:150ms]" />
-        <span className="h-1.5 w-1.5 animate-blink rounded-full bg-navy/40 [animation-delay:300ms]" />
+    <div className="flex flex-col gap-1.5">
+      <p className="pl-1 text-[12px] font-semibold text-white/55">Alina</p>
+      <div className="glass-panel flex w-fit items-center gap-1 px-4 py-3.5">
+        <DotLoader />
       </div>
     </div>
   );

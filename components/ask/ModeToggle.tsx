@@ -18,7 +18,7 @@ export function ModeToggle({
   onChange: (mode: AskMode) => void;
 }) {
   return (
-    <div className="flex flex-none items-center gap-0.5 rounded-full border border-navy/10 bg-white p-1">
+    <div className="glass-pill flex flex-none items-center gap-0.5 p-1">
       {OPTIONS.map(({ id, label, icon: Icon }) => {
         const isActive = mode === id;
         return (
@@ -27,7 +27,7 @@ export function ModeToggle({
             onClick={() => onChange(id)}
             className={clsx(
               "flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold transition-all duration-150",
-              isActive ? "bg-navy text-white" : "text-navy/50 hover:text-navy"
+              isActive ? "bg-white/20 text-white" : "text-white/55 hover:text-white"
             )}
           >
             <Icon size={14} />

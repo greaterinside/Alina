@@ -46,6 +46,18 @@
     @apply rounded-3xl border border-navy/5 bg-white shadow-card;
   }
 
+  /* Translucent glass panels — sit over the particle field background on
+     the Ask screen instead of solid white cards. */
+  .glass-panel {
+    @apply rounded-3xl border border-white/15 bg-white/[0.07] backdrop-blur-xl;
+  }
+  .glass-pill {
+    @apply rounded-full border border-white/15 bg-white/10 backdrop-blur-xl;
+  }
+  .glass-pill-active {
+    @apply rounded-full border border-white/25 bg-white/20 backdrop-blur-xl;
+  }
+
   /* Alina's answers are real Markdown from Claude — this renders it instead
      of leaving "**bold**" and "- " asterisks/dashes visible as plain text. */
   .markdown-answer {
@@ -94,5 +106,23 @@
   .markdown-answer th,
   .markdown-answer td {
     @apply border border-navy/10 px-2.5 py-1.5;
+  }
+
+  /* Light-on-dark overrides for markdown rendered on the glass panels. */
+  .markdown-answer--dark strong,
+  .markdown-answer--dark h1,
+  .markdown-answer--dark h2,
+  .markdown-answer--dark h3 {
+    @apply text-white;
+  }
+  .markdown-answer--dark blockquote {
+    @apply border-white/25 text-white/65;
+  }
+  .markdown-answer--dark hr {
+    @apply border-white/15;
+  }
+  .markdown-answer--dark th,
+  .markdown-answer--dark td {
+    @apply border-white/15;
   }
 }

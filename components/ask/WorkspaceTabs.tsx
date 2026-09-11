@@ -24,10 +24,10 @@ export function WorkspaceTabs({
             key={id}
             onClick={() => onChange(id)}
             className={clsx(
-              "rounded-full px-4 py-2 text-[13px] font-semibold transition-all duration-150 active:scale-95",
+              "rounded-full px-4 py-2 text-[13px] font-semibold backdrop-blur-xl transition-all duration-150 active:scale-95",
               isActive
-                ? "bg-navy text-white shadow-soft"
-                : "border border-navy/12 bg-white text-navy/65 hover:border-navy/25 hover:text-navy"
+                ? "border border-white/25 bg-white/20 text-white"
+                : "border border-white/12 bg-white/[0.06] text-white/60 hover:border-white/25 hover:text-white"
             )}
           >
             {WORKSPACES[id].name}

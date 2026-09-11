@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { Menu } from "lucide-react";
 import { Sidebar } from "@/components/sidebar/Sidebar";
-import { WelcomeOverlay } from "@/components/welcome/WelcomeOverlay";
 import { GreaterInsideLogo } from "@/components/branding/GreaterInsideLogo";
 import type { Identity } from "@/lib/identity";
 
@@ -53,8 +52,6 @@ export function AppShell({
           {children}
         </main>
       </div>
-
-      <WelcomeOverlay />
     </div>
   );
 }

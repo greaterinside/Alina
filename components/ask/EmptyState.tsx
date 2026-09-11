@@ -1,6 +1,5 @@
 "use client";
 
-import { ParticlePresence } from "@/components/mascot/ParticlePresence";
 import type { AskMode, WorkspaceId } from "@/lib/types";
 import { WORKSPACES } from "@/lib/types";
 import { SUGGESTED_PROMPTS } from "@/lib/prompts";
@@ -25,12 +24,11 @@ export function EmptyState({
 
   return (
     <div className="flex h-full flex-col items-center justify-center gap-7 px-6 text-center">
-      <ParticlePresence state="idle" size="xl" />
       <div className="max-w-lg">
-        <p className="text-[30px] font-bold leading-[1.15] tracking-tight text-navy sm:text-[36px]">
+        <p className="text-[30px] font-bold leading-[1.15] tracking-tight text-white sm:text-[36px]">
           {GREETINGS[workspace]}
         </p>
-        <p className="mx-auto mt-3 max-w-sm text-[14px] leading-relaxed text-charcoal/45">
+        <p className="mx-auto mt-3 max-w-sm text-[14px] leading-relaxed text-white/55">
           {WORKSPACES[workspace].tagline} — ask in your own words, no need to get it exactly right.
         </p>
       </div>
@@ -39,7 +37,7 @@ export function EmptyState({
           <button
             key={chip}
             onClick={() => onPick(chip)}
-            className="rounded-full border border-navy/10 bg-white px-4 py-2 text-[13px] font-medium text-navy/70 shadow-xs transition-all duration-150 hover:-translate-y-0.5 hover:border-terracotta/35 hover:shadow-soft hover:text-navy active:translate-y-0"
+            className="glass-pill px-4 py-2 text-[13px] font-medium text-white/75 transition-all duration-150 hover:-translate-y-0.5 hover:border-white/30 hover:text-white active:translate-y-0"
           >
             {chip}
           </button>

@@ -35,7 +35,7 @@ export function Composer({
   }
 
   return (
-    <div className="flex items-end gap-2 rounded-3xl border border-navy/10 bg-white p-2 pl-4 shadow-card transition-colors focus-within:border-terracotta/40">
+    <div className="glass-panel flex items-end gap-2 p-2 pl-4 shadow-lg transition-colors focus-within:border-white/35">
       <textarea
         ref={textareaRef}
         value={value}
@@ -43,7 +43,7 @@ export function Composer({
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
         rows={multiline ? 3 : 1}
-        className="max-h-40 flex-1 resize-none bg-transparent py-2.5 text-[15px] leading-relaxed text-charcoal placeholder:text-charcoal/35 focus:outline-none"
+        className="max-h-40 flex-1 resize-none bg-transparent py-2.5 text-[15px] leading-relaxed text-white placeholder:text-white/35 focus:outline-none"
       />
 
       {onMic && (
@@ -54,8 +54,8 @@ export function Composer({
           className={clsx(
             "grid h-10 w-10 flex-none place-items-center rounded-2xl border transition-all duration-150 active:scale-95 disabled:opacity-30",
             micListening
-              ? "border-terracotta bg-terracotta/10 text-terracotta animate-pulse-ring"
-              : "border-navy/12 text-navy/55 hover:border-navy/25 hover:text-navy"
+              ? "border-cyan-300/60 bg-cyan-300/10 text-cyan-300 animate-pulse-ring"
+              : "border-white/15 text-white/55 hover:border-white/30 hover:text-white"
           )}
         >
           <Mic size={17} />
