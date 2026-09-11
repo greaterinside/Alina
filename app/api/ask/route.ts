@@ -6,9 +6,12 @@ import {
   composeAnswer,
   composeReport,
   embedQuery,
+  extractPersonalFact,
   getUserPersonalization,
   getWorkspaceTone,
   matchKnowledge,
+  rememberConversation,
+  rememberPersonalFact,
   SOURCE_LABELS,
 } from "@/lib/rag";
 import { WORKSPACES, type WorkspaceId } from "@/lib/types";
@@ -113,6 +116,22 @@ export async function POST(req: NextRequest) {
       history: history.map((h) => ({ role: h.role, content: h.content })),
       question: message,
     });
+
+    // Persistent memory — best-effort, never lets a failure here affect the
+    // answer already composed above. Only for natural chat exchanges, not
+    // typing/report mode (drafting requests aren't personal statements).
+    if (mode === "chat") {
+      await Promise.all([
+        identity.userId
+          ? extractPersonalFact(message).then((fact) =>
+              fact ? rememberPersonalFact(supabase, identity.userId!, workspace, fact) : undefined
+            )
+          : Promise.resolve(),
+        matches.length > 0
+          ? rememberConversation({ supabase, workspace, question: message, answer: content, askedBy: identity.userId })
+          : Promise.resolve(),
+      ]);
+    }
 
     return NextResponse.json({
       content,

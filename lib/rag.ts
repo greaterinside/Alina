@@ -21,6 +21,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   "social.testimonials": "Testimonial",
   "social.content_prompts": "Content prompt",
   "support.tickets": "Support ticket",
+  "public.conversation_memory": "Past answer",
 };
 
 /** Row shape returned by the real public.match_knowledge Postgres function. */
@@ -257,4 +258,121 @@ function parseReportResponse(text: string): { title: string; summary: string; ma
     summary: "Here's the report — open the preview to see the full thing.",
     markdown: text,
   };
+}
+
+const MAX_PERSONAL_NOTES_CHARS = 1500;
+const MAX_REMEMBERED_FACTS = 10;
+
+/**
+ * Reads a single message and decides whether it states a lasting personal
+ * fact/preference worth remembering across future conversations — same
+ * idea as ChatGPT/Claude's own memory feature, just scoped to one message
+ * at a time rather than a whole conversation. Deliberately conservative:
+ * a question or a one-off request is not a fact, and it's told never to
+ * invent one that wasn't actually said.
+ */
+export async function extractPersonalFact(message: string): Promise<string | null> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return null;
+
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: ANSWER_MODEL,
+        max_tokens: 100,
+        system:
+          "You extract lasting personal facts or preferences from a single message — the kind worth " +
+          "remembering across future conversations (their role, how they like answers phrased or " +
+          "structured, a recurring workflow detail). Reply with ONLY the fact as one short plain " +
+          "sentence written in third person (e.g. \"Prefers short, direct answers\"), or reply with " +
+          "exactly NONE if this message doesn't state anything worth remembering long-term. A question " +
+          "is not a fact. A one-off request is not a fact. Never invent one that wasn't actually said.",
+        messages: [{ role: "user", content: message }],
+      }),
+    });
+    if (!res.ok) return null;
+
+    const data = await res.json();
+    const text = (data.content ?? [])
+      .filter((block: { type: string; text?: string }) => block.type === "text")
+      .map((block: { text?: string }) => block.text ?? "")
+      .join(" ")
+      .trim();
+
+    if (!text || text.toUpperCase() === "NONE") return null;
+    return text;
+  } catch (err) {
+    console.error("[extractPersonalFact]", err);
+    return null;
+  }
+}
+
+/** Merges a newly-extracted fact into this person's personal_notes for a workspace, bounded so it can't grow unbounded. */
+export async function rememberPersonalFact(
+  supabase: any,
+  userId: string,
+  workspace: WorkspaceId,
+  fact: string
+): Promise<void> {
+  try {
+    const { data: existing } = await supabase
+      .from("user_preferences")
+      .select("personal_notes")
+      .eq("user_id", userId)
+      .eq("workspace", workspace)
+      .maybeSingle();
+
+    const priorLines = (existing?.personal_notes as string | undefined)?.split("\n").filter(Boolean) ?? [];
+    if (priorLines.includes(fact)) return; // already remembered, don't duplicate
+
+    const merged = [...priorLines, fact].slice(-MAX_REMEMBERED_FACTS).join("\n").slice(-MAX_PERSONAL_NOTES_CHARS);
+
+    const { error } = await supabase
+      .from("user_preferences")
+      .upsert(
+        { user_id: userId, workspace, personal_notes: merged, updated_at: new Date().toISOString() },
+        { onConflict: "user_id,workspace" }
+      );
+    if (error) console.error("[rememberPersonalFact] upsert failed", error.message);
+  } catch (err) {
+    console.error("[rememberPersonalFact]", err);
+  }
+}
+
+/**
+ * Embeds a well-grounded chat exchange (one that actually had real
+ * matches behind it) and saves it to public.conversation_memory, so the
+ * same good answer can surface again for a related future question —
+ * shared across the team, not per-person like user_preferences above.
+ * Best-effort: a failure here never breaks the actual answer already
+ * returned to the user.
+ */
+export async function rememberConversation(opts: {
+  supabase: any;
+  workspace: WorkspaceId;
+  question: string;
+  answer: string;
+  askedBy?: string | null;
+}): Promise<void> {
+  try {
+    const content = `Q: ${opts.question}\nA: ${opts.answer}`;
+    const embedding = await embedQuery(content.slice(0, 8000));
+    const { error } = await opts.supabase.from("conversation_memory").insert({
+      workspace: opts.workspace,
+      question: opts.question,
+      answer: opts.answer,
+      content,
+      embedding,
+      asked_by: opts.askedBy ?? null,
+    });
+    if (error) console.error("[rememberConversation] insert failed", error.message);
+  } catch (err) {
+    console.error("[rememberConversation]", err);
+  }
 }
