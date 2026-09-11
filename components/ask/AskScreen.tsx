@@ -4,7 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Volume2, VolumeX, Trash2 } from "lucide-react";
 import clsx from "clsx";
-import { Mascot, type MascotState } from "@/components/mascot/Mascot";
+import type { MascotState } from "@/components/mascot/Mascot";
+import { ParticlePresence } from "@/components/mascot/ParticlePresence";
 import { WorkspaceTabs } from "@/components/ask/WorkspaceTabs";
 import { ModeToggle } from "@/components/ask/ModeToggle";
 import { Composer } from "@/components/ask/Composer";
@@ -282,7 +283,7 @@ export function AskScreen({
               </div>
             )}
             <div className="mx-auto flex max-w-2xl items-end gap-3">
-              <Mascot state={mascotState} size="md" className="mb-1 hidden sm:block" />
+              <ParticlePresence state={mascotState} size="md" className="mb-1 hidden sm:block" />
               <div className="flex-1">
                 <Composer
                   value={input}
@@ -319,7 +320,7 @@ export function AskScreen({
                 ))}
                 {loading && (
                   <div className="card-chunky flex items-center gap-3 p-5">
-                    <Mascot state="thinking" size="sm" />
+                    <ParticlePresence state="thinking" size="sm" />
                     <p className="text-[13.5px] text-navy/50">Drafting, one second…</p>
                   </div>
                 )}
@@ -349,7 +350,7 @@ export function AskScreen({
 function ThinkingBubble() {
   return (
     <div className="flex items-start gap-3">
-      <Mascot state="thinking" size="sm" />
+      <ParticlePresence state="thinking" size="sm" />
       <div className="flex items-center gap-1 rounded-3xl rounded-tl-lg border border-navy/[0.07] bg-white px-4 py-3.5 shadow-card">
         <span className="h-1.5 w-1.5 animate-blink rounded-full bg-navy/40 [animation-delay:0ms]" />
         <span className="h-1.5 w-1.5 animate-blink rounded-full bg-navy/40 [animation-delay:150ms]" />

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Mascot } from "@/components/mascot/Mascot";
+import { ParticlePresence } from "@/components/mascot/ParticlePresence";
 
 const SESSION_KEY = "alina-welcome-shown";
 const WRITE_MS = 1100;
@@ -74,7 +74,7 @@ export function WelcomeOverlay() {
       </button>
 
       <div className="flex items-end gap-4 px-6">
-        <Mascot state="happy" size="lg" className="mb-1 animate-bounce-in hidden sm:block" />
+        <ParticlePresence state="happy" size="lg" className="mb-1 animate-bounce-in hidden sm:block" />
         <div className="animate-write-reveal">
           <p className="whitespace-nowrap font-hand text-[64px] leading-none text-terracotta sm:text-[84px]">
             Hi, I&apos;m Alina

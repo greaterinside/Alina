@@ -1,6 +1,6 @@
 "use client";
 
-import { Mascot } from "@/components/mascot/Mascot";
+import { ParticlePresence } from "@/components/mascot/ParticlePresence";
 import type { AskMode, WorkspaceId } from "@/lib/types";
 import { WORKSPACES } from "@/lib/types";
 import { SUGGESTED_PROMPTS } from "@/lib/prompts";
@@ -25,7 +25,7 @@ export function EmptyState({
 
   return (
     <div className="flex h-full flex-col items-center justify-center gap-7 px-6 text-center">
-      <Mascot state="idle" size="xl" />
+      <ParticlePresence state="idle" size="xl" />
       <div className="max-w-lg">
         <p className="text-[30px] font-bold leading-[1.15] tracking-tight text-navy sm:text-[36px]">
           {GREETINGS[workspace]}
