@@ -79,11 +79,48 @@ function pick(obj, ...names) {
   return undefined;
 }
 
-async function fathomFetch(path, params = {}) {
+/**
+ * Fathom's transcript field is an array of speaker turns
+ * ({ speaker: { display_name }, text, timestamp }), not a plain string —
+ * found out by actually running this against real data. summary's exact
+ * shape is still unconfirmed, so this handles string/array/object forms
+ * generically instead of assuming a second field turns out to be a plain
+ * string too.
+ */
+function fieldToText(value) {
+  if (value == null) return "";
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) {
+    if (value.length > 0 && typeof value[0] === "object" && value[0] !== null && "text" in value[0]) {
+      return value
+        .map((turn) => {
+          const speaker = turn?.speaker?.display_name ?? turn?.speaker ?? "Unknown";
+          return turn.text ? `${speaker}: ${turn.text}` : "";
+        })
+        .filter(Boolean)
+        .join("\n");
+    }
+    return value.map(fieldToText).filter(Boolean).join("\n");
+  }
+  if (typeof value === "object") {
+    return value.markdown_formatted ?? value.text ?? value.content ?? value.summary ?? JSON.stringify(value);
+  }
+  return String(value);
+}
+
+async function fathomFetch(path, params = {}, attempt = 1) {
   const url = new URL(`https://api.fathom.ai/external/v1${path}`);
   for (const [k, v] of Object.entries(params)) if (v !== undefined) url.searchParams.set(k, v);
 
   const res = await fetch(url, { headers: { "X-Api-Key": FATHOM_API_KEY } });
+
+  if (res.status === 429 && attempt <= 5) {
+    const retryAfter = res.headers.get("retry-after");
+    const waitMs = retryAfter ? Number(retryAfter) * 1000 : attempt * 4000;
+    console.log(`  rate limited — waiting ${Math.round(waitMs / 1000)}s before retry ${attempt}/5…`);
+    await new Promise((r) => setTimeout(r, waitMs));
+    return fathomFetch(path, params, attempt + 1);
+  }
   if (!res.ok) {
     throw new Error(`Fathom API ${path} failed: ${res.status} ${await res.text().catch(() => "")}`);
   }
@@ -108,7 +145,15 @@ async function fetchAllMeetings() {
     if (!loggedSample && page.length > 0) {
       loggedSample = true;
       console.log("First meeting's raw shape (for verifying field names below):");
-      console.log(JSON.stringify(page[0], null, 2).slice(0, 2000));
+      console.log("  top-level keys:", Object.keys(page[0]).join(", "));
+      for (const [k, v] of Object.entries(page[0])) {
+        const preview = Array.isArray(v)
+          ? `array(${v.length}), first item: ${JSON.stringify(v[0]).slice(0, 180)}`
+          : typeof v === "object" && v !== null
+          ? JSON.stringify(v).slice(0, 180)
+          : String(v).slice(0, 180);
+        console.log(`  ${k}: ${preview}`);
+      }
       console.log("---\n");
     }
 
@@ -120,14 +165,15 @@ async function fetchAllMeetings() {
         title: pick(raw, "title", "meeting_title", "name") ?? "Untitled call",
         url: pick(raw, "url", "share_url", "recording_url"),
         recordedAt: pick(raw, "recorded_at", "scheduled_start_time", "created_at"),
-        transcript: pick(raw, "transcript", "transcript_text") ?? "",
-        summary: pick(raw, "summary", "ai_summary", "default_summary") ?? "",
+        transcript: fieldToText(pick(raw, "transcript", "transcript_text")),
+        summary: fieldToText(pick(raw, "summary", "ai_summary", "default_summary")),
       });
     }
 
     cursor = pick(data, "next_cursor", "cursor");
     const hasMore = pick(data, "has_more");
     if (!cursor || page.length === 0 || hasMore === false) break;
+    await new Promise((r) => setTimeout(r, 1000)); // be polite between pages — this is what tripped the 429
   }
   return meetings;
 }
