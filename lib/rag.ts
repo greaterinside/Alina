@@ -344,7 +344,7 @@ async function runFathomTool(supabase: any, name: string, input: Record<string, 
   return "Unknown tool.";
 }
 
-const MAX_TOOL_ITERATIONS = 4;
+const MAX_TOOL_ITERATIONS = 6;
 
 /**
  * Shared by composeAnswer and composeReport: calls Claude, and if it asks
@@ -363,7 +363,7 @@ async function callAnthropicWithTools(opts: {
   const messages = [...opts.messages];
   let data: any;
 
-  for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
+  async function callAnthropic(withTools: boolean, extraSystem?: string) {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -374,19 +374,22 @@ async function callAnthropicWithTools(opts: {
       body: JSON.stringify({
         model: ANSWER_MODEL,
         max_tokens: opts.maxTokens,
-        system: opts.system,
+        system: extraSystem ? `${opts.system}\n\n${extraSystem}` : opts.system,
         messages,
-        ...(opts.supabase ? { tools: FATHOM_TOOLS } : {}),
+        ...(withTools && opts.supabase ? { tools: FATHOM_TOOLS } : {}),
       }),
     });
-
     if (!res.ok) throw new Error(`Answer generation failed: ${res.status}`);
-    data = await res.json();
+    return res.json();
+  }
 
-    if (data.stop_reason !== "tool_use" || !opts.supabase) break;
+  for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
+    data = await callAnthropic(true);
+
+    if (data.stop_reason !== "tool_use" || !opts.supabase) return data;
 
     const toolUseBlocks = (data.content ?? []).filter((b: { type: string }) => b.type === "tool_use");
-    if (toolUseBlocks.length === 0) break;
+    if (toolUseBlocks.length === 0) return data;
 
     messages.push({ role: "assistant", content: data.content });
     const toolResults = await Promise.all(
@@ -399,7 +402,17 @@ async function callAnthropicWithTools(opts: {
     messages.push({ role: "user", content: toolResults });
   }
 
-  return data;
+  // Ran out of lookup attempts while Claude was still mid-investigation
+  // (a multi-part question — several names, a date — can genuinely need
+  // more round trips than the cap above). Rather than surface an empty,
+  // unhelpful fallback, force one final answer from whatever it's already
+  // gathered by dropping `tools` from this last call so it can't ask for
+  // yet another lookup it won't get to run.
+  return callAnthropic(
+    false,
+    "You've done as much lookup as you can for this turn — answer now from whatever you've already " +
+      "found, and say plainly if something specific is still unconfirmed rather than leaving it out silently."
+  );
 }
 
 /** Anthropic's response can include non-text blocks (e.g. thinking) ahead of the actual answer. */
@@ -434,7 +447,9 @@ export async function composeAnswer(opts: {
   const text = extractText(data);
   if (!text) {
     console.error("[composeAnswer] no text block in response", JSON.stringify(data).slice(0, 500));
-    return "I found relevant context but couldn't compose an answer from it — try rephrasing the question.";
+    return data.stop_reason === "tool_use"
+      ? "This needed more digging than I could finish in one go — try asking about one person or one specific call at a time, and I'll have a better shot at it."
+      : "I found relevant context but couldn't compose an answer from it — try rephrasing the question.";
   }
   return text;
 }
@@ -480,7 +495,10 @@ export async function composeReport(opts: {
     console.error("[composeReport] no text block in response", JSON.stringify(data).slice(0, 500));
     return {
       title: "Report",
-      summary: "I found relevant context but couldn't put the report together — try rephrasing.",
+      summary:
+        data.stop_reason === "tool_use"
+          ? "This needed more digging than I could finish in one go — try asking about one person or one specific call at a time."
+          : "I found relevant context but couldn't put the report together — try rephrasing.",
       markdown: "",
     };
   }
