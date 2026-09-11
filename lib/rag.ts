@@ -376,3 +376,36 @@ export async function rememberConversation(opts: {
     console.error("[rememberConversation]", err);
   }
 }
+
+/**
+ * Saves one user/assistant exchange to public.chat_messages so this
+ * person's conversation in this workspace is still there if they come
+ * back days later — separate from rememberConversation above, which is
+ * shared/searchable-by-anyone via similarity, not a per-person continuous
+ * log. Runs for every mode (chat/typing/report), unlike the two memory
+ * functions above which are chat-only. Best-effort, same as those.
+ */
+export async function saveChatExchange(opts: {
+  supabase: any;
+  userId: string;
+  workspace: WorkspaceId;
+  question: string;
+  answer: string;
+  report?: { title: string; markdown: string } | null;
+}): Promise<void> {
+  try {
+    const { error } = await opts.supabase.from("chat_messages").insert([
+      { user_id: opts.userId, workspace: opts.workspace, role: "user", content: opts.question },
+      {
+        user_id: opts.userId,
+        workspace: opts.workspace,
+        role: "assistant",
+        content: opts.answer,
+        report: opts.report ?? null,
+      },
+    ]);
+    if (error) console.error("[saveChatExchange] insert failed", error.message);
+  } catch (err) {
+    console.error("[saveChatExchange]", err);
+  }
+}

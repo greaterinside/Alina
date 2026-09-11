@@ -14,6 +14,7 @@ import { EmptyState } from "@/components/ask/EmptyState";
 import { ReportPreviewPanel } from "@/components/ask/ReportPreviewPanel";
 import { useSpeech } from "@/lib/hooks/useSpeech";
 import { useVoiceInput } from "@/lib/hooks/useVoiceInput";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { WORKSPACES, type AskMode, type ChatMessage, type ReportDoc, type WorkspaceId } from "@/lib/types";
 
 let idCounter = 0;
@@ -46,6 +47,8 @@ export function AskScreen({
   const [autoSpeak, setAutoSpeak] = useState(false);
   const [justAnswered, setJustAnswered] = useState(false);
   const [openReport, setOpenReport] = useState<ReportDoc | null>(null);
+  const [loadedWorkspaces, setLoadedWorkspaces] = useState<Set<WorkspaceId>>(new Set());
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   const threadRef = useRef<HTMLDivElement>(null);
   const { speak, speaking, error: speechError, supported: speechSupported } = useSpeech();
@@ -66,6 +69,59 @@ export function AskScreen({
   useEffect(() => {
     threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, loading]);
+
+  // Loads this person's saved conversation for a workspace the first time
+  // it's viewed — lazily, per workspace, not all four up front. Never
+  // overwrites a conversation already in progress (e.g. the fetch is still
+  // in flight when someone sends a message) — only fills in history if
+  // this workspace is still genuinely empty when it resolves.
+  useEffect(() => {
+    if (loadedWorkspaces.has(workspace)) return;
+    let cancelled = false;
+
+    (async () => {
+      const supabase = getSupabaseBrowserClient();
+      const markLoaded = () => !cancelled && setLoadedWorkspaces((prev) => new Set(prev).add(workspace));
+
+      if (!supabase) return markLoaded();
+      setHistoryLoading(true);
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        setHistoryLoading(false);
+        return markLoaded();
+      }
+
+      const { data, error } = await supabase
+        .from("chat_messages")
+        .select("id, role, content, report, created_at")
+        .eq("user_id", user.id)
+        .eq("workspace", workspace)
+        .order("created_at", { ascending: true })
+        .limit(200);
+
+      if (cancelled) return;
+      setHistoryLoading(false);
+
+      if (!error && data && data.length > 0) {
+        const loaded: ChatMessage[] = data.map((row) => ({
+          id: row.id,
+          role: row.role as "user" | "assistant",
+          content: row.content,
+          report: (row.report as ReportDoc | null) ?? undefined,
+          createdAt: row.created_at,
+        }));
+        setMessagesByWs((prev) => (prev[workspace]?.length ? prev : { ...prev, [workspace]: loaded }));
+      }
+      markLoaded();
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [workspace, loadedWorkspaces]);
 
   function appendMessage(ws: WorkspaceId, message: ChatMessage) {
     setMessagesByWs((prev) => ({ ...prev, [ws]: [...(prev[ws] ?? []), message] }));
@@ -171,7 +227,7 @@ export function AskScreen({
       {mode !== "typing" ? (
         <>
           <div ref={threadRef} className="flex-1 overflow-y-auto px-6 py-6">
-            {messages.length === 0 ? (
+            {messages.length === 0 && historyLoading ? null : messages.length === 0 ? (
               <EmptyState workspace={workspace} mode={mode} onPick={send} />
             ) : (
               <div className="mx-auto flex max-w-2xl flex-col gap-4">
@@ -217,7 +273,7 @@ export function AskScreen({
       ) : (
         <>
           <div className="flex-1 overflow-y-auto px-6 py-6">
-            {typingPairs.length === 0 && !loading ? (
+            {typingPairs.length === 0 && historyLoading ? null : typingPairs.length === 0 && !loading ? (
               <EmptyState workspace={workspace} mode={mode} onPick={send} />
             ) : (
               <div className="mx-auto flex max-w-2xl flex-col gap-4">

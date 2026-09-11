@@ -12,6 +12,7 @@ import {
   matchKnowledge,
   rememberConversation,
   rememberPersonalFact,
+  saveChatExchange,
   SOURCE_LABELS,
 } from "@/lib/rag";
 import { WORKSPACES, type WorkspaceId } from "@/lib/types";
@@ -104,6 +105,17 @@ export async function POST(req: NextRequest) {
         question: message,
       });
 
+      if (identity.userId) {
+        await saveChatExchange({
+          supabase,
+          userId: identity.userId,
+          workspace,
+          question: message,
+          answer: summary,
+          report: { title, markdown },
+        });
+      }
+
       return NextResponse.json({
         content: summary,
         report: { title, markdown },
@@ -117,21 +129,29 @@ export async function POST(req: NextRequest) {
       question: message,
     });
 
-    // Persistent memory — best-effort, never lets a failure here affect the
-    // answer already composed above. Only for natural chat exchanges, not
-    // typing/report mode (drafting requests aren't personal statements).
-    if (mode === "chat") {
-      await Promise.all([
-        identity.userId
-          ? extractPersonalFact(message).then((fact) =>
-              fact ? rememberPersonalFact(supabase, identity.userId!, workspace, fact) : undefined
-            )
-          : Promise.resolve(),
-        matches.length > 0
-          ? rememberConversation({ supabase, workspace, question: message, answer: content, askedBy: identity.userId })
-          : Promise.resolve(),
-      ]);
-    }
+    // Persistent memory — both best-effort, never lets a failure here affect
+    // the answer already composed above.
+    await Promise.all([
+      // Personal facts + shared searchable memory: chat mode only, since
+      // typing/report are drafting requests, not natural statements.
+      mode === "chat"
+        ? Promise.all([
+            identity.userId
+              ? extractPersonalFact(message).then((fact) =>
+                  fact ? rememberPersonalFact(supabase, identity.userId!, workspace, fact) : undefined
+                )
+              : Promise.resolve(),
+            matches.length > 0
+              ? rememberConversation({ supabase, workspace, question: message, answer: content, askedBy: identity.userId })
+              : Promise.resolve(),
+          ])
+        : Promise.resolve(),
+      // Per-person chat history: every mode, so a conversation is still
+      // there if this person comes back to it later.
+      identity.userId
+        ? saveChatExchange({ supabase, userId: identity.userId, workspace, question: message, answer: content })
+        : Promise.resolve(),
+    ]);
 
     return NextResponse.json({
       content,
