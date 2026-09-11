@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Volume2, VolumeX } from "lucide-react";
+import { Volume2, VolumeX, Trash2 } from "lucide-react";
 import clsx from "clsx";
 import { Mascot, type MascotState } from "@/components/mascot/Mascot";
 import { WorkspaceTabs } from "@/components/ask/WorkspaceTabs";
@@ -127,6 +127,29 @@ export function AskScreen({
     setMessagesByWs((prev) => ({ ...prev, [ws]: [...(prev[ws] ?? []), message] }));
   }
 
+  // Clears the visible thread AND the saved chat_messages rows behind it
+  // for this workspace — otherwise it'd just reload right back in on the
+  // next visit, since that table is exactly where persisted history comes
+  // from. Deliberately does NOT touch user_preferences (learned facts) or
+  // conversation_memory (shared past-answer knowledge) — those are how
+  // Alina keeps learning progressively regardless of any chat being
+  // cleared; this only clears the literal transcript.
+  async function clearChatHistory() {
+    if (messages.length === 0) return;
+    if (!window.confirm(`Clear your ${WORKSPACES[workspace].name} conversation? This can't be undone.`)) return;
+
+    setMessagesByWs((prev) => ({ ...prev, [workspace]: [] }));
+
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) return;
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+
+    await supabase.from("chat_messages").delete().eq("user_id", user.id).eq("workspace", workspace);
+  }
+
   async function send(text: string) {
     const trimmed = text.trim();
     if (!trimmed || loading) return;
@@ -218,6 +241,15 @@ export function AskScreen({
               )}
             >
               {autoSpeak ? <Volume2 size={16} /> : <VolumeX size={16} />}
+            </button>
+          )}
+          {messages.length > 0 && (
+            <button
+              onClick={clearChatHistory}
+              title={`Clear your ${WORKSPACES[workspace].name} conversation`}
+              className="grid h-9 w-9 place-items-center rounded-2xl border border-navy/10 text-navy/50 transition-colors hover:border-terracotta/30 hover:text-terracotta"
+            >
+              <Trash2 size={16} />
             </button>
           )}
           <ModeToggle mode={mode} onChange={setMode} />
