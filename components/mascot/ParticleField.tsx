@@ -132,10 +132,9 @@ export function ParticleField({
       });
       lines.push(currentLine.trim());
 
-      // Sized to actually dominate the screen as a splash moment, not
-      // sit as modest text — the original divisor left "Hi, I'm Alina"
-      // reading small and easy to miss on a full-viewport canvas.
-      let fs = Math.min((cW * 0.92) / (maxChars * 0.34), (cH * 0.6) / lines.length, 320);
+      // Sized as a real moment, but not edge-to-edge — that read as
+      // oversized/off relative to everything else on screen.
+      let fs = Math.min((cW * 0.92) / (maxChars * 0.52), (cH * 0.5) / lines.length, 220);
       if (phrase.length > 30) fs *= 0.8;
 
       c2.fillStyle = "#fff";
@@ -322,9 +321,8 @@ export function ParticleField({
 
     const timers: ReturnType<typeof setTimeout>[] = [];
     if (!alreadyShown) {
-      // Held much longer than before (was 2.6s, felt like a blip) — this
-      // is meant to be a real "arrival" moment, not a flash.
-      const HOLD_MS = 5200;
+      // 2.6s read as a blip, 5.2s dragged — this lands in between.
+      const HOLD_MS = 3200;
       timers.push(setTimeout(() => formWord(WELCOME_TEXT), 700));
       timers.push(
         setTimeout(() => {
