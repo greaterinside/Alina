@@ -74,7 +74,7 @@ export function Sidebar({
         // still rounds this element's own background/shadow regardless of
         // overflow; only the scrollable inner content needs clipping,
         // handled by the wrapper just inside this.
-        "fixed inset-y-3 left-3 z-50 flex w-[252px] flex-none flex-col rounded-3xl bg-navy text-white/90 shadow-pop transition-transform duration-200 ease-out",
+        "fixed inset-y-3 left-3 z-50 flex w-[252px] flex-none flex-col rounded-3xl bg-[#05050f] text-white/90 shadow-pop transition-transform duration-200 ease-out",
         "md:static md:inset-auto md:left-auto md:z-auto md:translate-x-0 md:shadow-pop md:transition-[width]",
         mobileOpen ? "translate-x-0" : "-translate-x-[120%]",
         collapsed ? "md:w-[76px]" : "md:w-[252px]"
@@ -83,7 +83,7 @@ export function Sidebar({
       <button
         onClick={toggle}
         title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        className="absolute -right-3 top-8 z-10 hidden h-6 w-6 place-items-center rounded-full border border-navy/10 bg-white text-navy shadow-soft transition-transform hover:scale-105 active:scale-95 md:grid"
+        className="absolute -right-3 top-8 z-10 hidden h-6 w-6 place-items-center rounded-full border border-white/15 bg-[#0d0d1c] text-white/70 shadow-soft transition-transform hover:scale-105 hover:text-white active:scale-95 md:grid"
       >
         {collapsed ? <ChevronRight size={13} /> : <ChevronLeft size={13} />}
       </button>
@@ -118,11 +118,11 @@ export function Sidebar({
                   onClick={onNavigate}
                   title={collapsed ? label : undefined}
                   className={clsx(
-                    "group flex items-center rounded-xl py-2.5 text-[13.5px] font-medium transition-all duration-150",
+                    "group flex items-center rounded-xl border py-2.5 text-[13.5px] font-medium backdrop-blur-xl transition-all duration-150",
                     collapsed ? "justify-center px-0" : "gap-2.5 px-3",
                     active
-                      ? "bg-white text-navy shadow-soft"
-                      : "text-white/65 hover:bg-white/[0.08] hover:text-white"
+                      ? "border-white/20 bg-white/[0.12] text-white"
+                      : "border-transparent text-white/65 hover:bg-white/[0.08] hover:text-white"
                   )}
                 >
                   <Icon

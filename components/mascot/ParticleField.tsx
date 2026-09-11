@@ -5,15 +5,17 @@ import clsx from "clsx";
 
 // This is a direct port of the particle engine as given — same Fibonacci
 // sphere, same spring physics, same colors (no brand palette), same text
-// sampling. The only real changes: it sizes to its container instead of
-// the full window, drives the sphere<->text transition programmatically
-// (on mount) instead of from a text input, and drops the demo-only UI
-// (input box, mouse-repel, double-click reset) since this runs as a
-// passive background, not an interactive standalone page.
+// sampling, same cursor-repulsion. The only real changes: it sizes to its
+// container instead of the full window, drives the sphere<->text
+// transition programmatically (on mount) instead of from a text input,
+// and drops the demo-only UI (input box, double-click reset) since this
+// runs as a passive background, not an interactive standalone page.
 const N = 10000;
 const PHI = Math.PI * (1 + Math.sqrt(5));
 const FOV = 550;
 const CAMERA_Z = 600;
+const REPEL_RADIUS = 100; // px — cursor influence radius
+const REPEL_FORCE = 8; // strength of repulsion
 
 const WELCOME_TEXT = "Hi, I'm Alina";
 const SESSION_KEY = "alina-particle-intro-shown";
@@ -55,6 +57,8 @@ export function ParticleField({ className }: { className?: string }) {
     let t = 0;
     let rotY = 0;
     let raf = 0;
+    let mouseX = -9999;
+    let mouseY = -9999;
     let particlesSeeded = false;
 
     function initSphereTargets() {
@@ -198,6 +202,27 @@ export function ParticleField({ className }: { className?: string }) {
         vx[i] += (targetX - px[i]) * sp;
         vy[i] += (targetY - py[i]) * sp;
         vz[i] += (targetZ - pz[i]) * sp;
+
+        // Cursor repulsion — same formula as given, just no longer
+        // gated to text mode only: the sphere is the persistent state
+        // now, so hovering it should distort it too, springing back
+        // once the cursor moves away (the spring pull above already
+        // does the "back to original shape" part on its own).
+        if (mouseX > 0) {
+          const scale = FOV / (FOV + pz[i] + CAMERA_Z);
+          const sx = px[i] * scale + CX;
+          const sy = py[i] * scale + CY;
+          const rdx = sx - mouseX;
+          const rdy = sy - mouseY;
+          const d2 = rdx * rdx + rdy * rdy;
+          if (d2 < REPEL_RADIUS * REPEL_RADIUS && d2 > 1) {
+            const d = Math.sqrt(d2);
+            const mag = REPEL_FORCE * (1 - d / REPEL_RADIUS) * 5;
+            vx[i] += (rdx / d) * mag;
+            vy[i] += (rdy / d) * mag;
+          }
+        }
+
         vx[i] *= 0.82;
         vy[i] *= 0.82;
         vz[i] *= 0.82;
@@ -257,6 +282,24 @@ export function ParticleField({ className }: { className?: string }) {
     const ro = new ResizeObserver(resize);
     ro.observe(container);
 
+    // Listened on window, not the container: the chat UI (composer,
+    // message cards, topbar) sits visually on top of this canvas across
+    // most of the screen, which would swallow a container-level
+    // mousemove in all the areas that actually have content. window
+    // still receives the move (it bubbles) regardless of which element
+    // is topmost, so hovering the sphere anywhere behind the UI works.
+    function handleMouseMove(e: MouseEvent) {
+      const rect = container.getBoundingClientRect();
+      mouseX = e.clientX - rect.left;
+      mouseY = e.clientY - rect.top;
+    }
+    function handleMouseLeave() {
+      mouseX = -9999;
+      mouseY = -9999;
+    }
+    window.addEventListener("mousemove", handleMouseMove);
+    document.documentElement.addEventListener("mouseleave", handleMouseLeave);
+
     let alreadyShown = true;
     try {
       alreadyShown = sessionStorage.getItem(SESSION_KEY) === "1";
@@ -282,6 +325,8 @@ export function ParticleField({ className }: { className?: string }) {
     return () => {
       cancelAnimationFrame(raf);
       ro.disconnect();
+      window.removeEventListener("mousemove", handleMouseMove);
+      document.documentElement.removeEventListener("mouseleave", handleMouseLeave);
       timers.forEach(clearTimeout);
     };
   }, []);
