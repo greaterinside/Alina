@@ -129,6 +129,10 @@ export function buildSystemPrompt(opts: {
     "Answer only from the provided context. If the context doesn't cover it, say so plainly instead of guessing.",
     "Answer directly and plainly — no inline citation markers or source tags, just the answer itself.",
     "Be warm, direct, and useful — never corporate or vague.",
+    "Exception to \"no source tags\": if context includes a call's \"watch:\" link and the answer is " +
+      "actually about that call, include the link as a normal clickable markdown link so they can jump " +
+      "to it — that's a practical way to get back to the recording, not a citation footnote. Skip it for " +
+      "anything else.",
   ];
   if (opts.masterTone) {
     lines.push(`House tone for this workspace: ${opts.masterTone}`);

@@ -167,6 +167,22 @@ Same `match_knowledge` caveat as GitHub above: add a
 `social.fathom_calls` branch to the function before this table's content
 shows up in Ask answers.
 
+Every chunk is stamped with a short line up front — call title, real
+participant names (pulled from the transcript's own speaker labels, which
+catch an external client's name even when they're not a calendar invitee),
+date, and the actual Fathom watch link — since `match_knowledge` only ever
+shows the first 300 characters of whichever chunk matched, and this is
+what lets "what did we discuss with Tradewize" or "give me a link to that
+call" actually work. A normal re-run only adds *new* chunks — it won't
+retroactively stamp this onto calls already ingested before this existed.
+To apply it to everything already in the database, run once with
+`FORCE_REFRESH=1` (re-embeds and overwrites every chunk, same cost as a
+fresh full run — not something to do casually or often):
+
+```bash
+FORCE_REFRESH=1 node scripts/ingest-fathom.mjs
+```
+
 ## Env vars
 
 | Var | Used for |

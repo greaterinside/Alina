@@ -50,6 +50,13 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const FATHOM_API_KEY = process.env.FATHOM_API_KEY;
+// Set FORCE_REFRESH=1 to re-embed and overwrite every chunk's content, not
+// just add new ones — needed the one time chunkMeeting()'s output format
+// changes (e.g. adding the participants/link line below) and you want
+// already-ingested calls to pick it up too, not just calls ingested from
+// here on. Costs the same as a full fresh run — every chunk gets
+// re-embedded — so it's opt-in, not automatic.
+const FORCE_REFRESH = process.env.FORCE_REFRESH === "1";
 const EMBEDDING_MODEL = "text-embedding-3-small";
 const EMBEDDING_DIMENSIONS = 1024;
 const MAX_INPUT_CHARS = 8000;
@@ -77,6 +84,37 @@ function pick(obj, ...names) {
     if (obj[name] !== undefined && obj[name] !== null && obj[name] !== "") return obj[name];
   }
   return undefined;
+}
+
+/**
+ * Who was actually on the call — pulled primarily from the transcript's
+ * own speaker labels (checked against real data: on an "Impromptu Zoom
+ * Meeting" with an external client, calendar_invitees only listed the
+ * internal host — the client's actual name, "TRADEWIZE TRAINING AND
+ * DEVELOPMENT LLC", only ever showed up as a transcript speaker label,
+ * never as a calendar invitee). calendar_invitees is used only to fill in
+ * anyone the transcript speakers didn't already cover.
+ */
+function extractParticipants(transcriptTurns, calendarInvitees) {
+  const names = [];
+  const seen = new Set();
+  const add = (name) => {
+    if (name && !seen.has(name)) {
+      seen.add(name);
+      names.push(name);
+    }
+  };
+
+  if (Array.isArray(transcriptTurns)) {
+    for (const turn of transcriptTurns) {
+      const speaker = turn?.speaker;
+      add(speaker?.display_name ?? (typeof speaker === "string" ? speaker : null));
+    }
+  }
+  if (Array.isArray(calendarInvitees)) {
+    for (const invitee of calendarInvitees) add(invitee?.name);
+  }
+  return names.slice(0, 8); // enough to identify who's on the call, not a full roster dump
 }
 
 /**
@@ -169,12 +207,17 @@ async function fetchAllMeetings() {
     for (const raw of page) {
       const id = pick(raw, "id", "meeting_id", "recording_id");
       if (!id) continue; // can't dedupe/resume without a stable id — skip rather than guess
+      const rawTranscript = pick(raw, "transcript", "transcript_text");
       meetings.push({
         id: String(id),
         title: pick(raw, "title", "meeting_title", "name") ?? "Untitled call",
-        url: pick(raw, "url", "share_url", "recording_url"),
+        // share_url is the human-facing link (fathom.video/share/...); url
+        // (fathom.video/calls/...) is more of an internal id-style link —
+        // prefer share_url for anything a person might actually click.
+        url: pick(raw, "share_url", "url", "recording_url"),
         recordedAt: pick(raw, "recording_start_time", "recorded_at", "scheduled_start_time", "created_at"),
-        transcript: fieldToText(pick(raw, "transcript", "transcript_text")),
+        participants: extractParticipants(rawTranscript, pick(raw, "calendar_invitees")),
+        transcript: fieldToText(rawTranscript),
         summary: fieldToText(pick(raw, "summary", "ai_summary", "default_summary")),
         actionItems: fieldToText(pick(raw, "action_items")),
         highlights: fieldToText(pick(raw, "highlights")),
@@ -222,15 +265,36 @@ async function fetchExistingKeys() {
 }
 
 /** Splits one meeting into embeddable chunks: a summary chunk (if any) plus transcript chunks. */
+/**
+ * "Call: <title> with <participants> on <date> — watch: <link>" — stamped
+ * on the front of EVERY chunk below, not just the first one. Two reasons
+ * this needs to be on every chunk, not one dedicated "info" chunk:
+ *  1. match_knowledge only ever shows the first 300 chars of whichever
+ *     chunk it retrieves — a separate metadata chunk could easily not be
+ *     the one that matches a given question.
+ *  2. Retrieval on "who did I talk to at Tradewize" needs the company
+ *     name attached to the actual relevant content, not floating in an
+ *     unrelated chunk elsewhere.
+ */
+function buildMetaLine(meeting) {
+  const parts = [`Call: ${meeting.title}`];
+  if (meeting.participants.length > 0) parts.push(`with ${meeting.participants.join(", ")}`);
+  const date = meeting.recordedAt ? new Date(meeting.recordedAt) : null;
+  if (date && !isNaN(date.getTime())) parts.push(`on ${date.toISOString().slice(0, 10)}`);
+  if (meeting.url) parts.push(`— watch: ${meeting.url}`);
+  return parts.join(" ");
+}
+
 function chunkMeeting(meeting) {
+  const meta = buildMetaLine(meeting);
   const chunks = [];
   if (meeting.summary.trim()) {
-    chunks.push(`${meeting.title}\n\nSummary:\n${meeting.summary.trim()}`);
+    chunks.push(`${meta}\n\nSummary:\n${meeting.summary.trim()}`);
   }
   const transcript = meeting.transcript.trim();
   for (let i = 0; i < transcript.length; i += CHUNK_CHARS) {
     const piece = transcript.slice(i, i + CHUNK_CHARS);
-    chunks.push(chunks.length === 0 ? `${meeting.title}\n\nTranscript:\n${piece}` : piece);
+    chunks.push(`${meta}\n\nTranscript:\n${piece}`);
   }
   // Fathom's own AI-extracted action items/highlights, when present — more
   // reliable than asking Claude to re-derive them from the raw transcript
@@ -239,12 +303,16 @@ function chunkMeeting(meeting) {
   // count — never changes between runs, so these two always land at fixed
   // new index positions past the end for a given meeting. Putting them
   // anywhere earlier would shift every later chunk_index on a re-run and
-  // duplicate rows instead of cleanly adding these two.
+  // duplicate rows instead of cleanly adding these two. (The content at an
+  // existing index CAN safely change on re-run — e.g. this meta line being
+  // added to already-chunked meetings — since that's an update via upsert,
+  // not a new row; it just won't happen automatically without
+  // FORCE_REFRESH=1, since normal runs skip indices that already exist.)
   if (meeting.actionItems.trim()) {
-    chunks.push(`${meeting.title}\n\nAction items:\n${meeting.actionItems.trim()}`);
+    chunks.push(`${meta}\n\nAction items:\n${meeting.actionItems.trim()}`);
   }
   if (meeting.highlights.trim()) {
-    chunks.push(`${meeting.title}\n\nHighlights:\n${meeting.highlights.trim()}`);
+    chunks.push(`${meta}\n\nHighlights:\n${meeting.highlights.trim()}`);
   }
   return chunks;
 }
@@ -273,7 +341,10 @@ async function main() {
   const meetings = await fetchAllMeetings();
   console.log(`Found ${meetings.length} meeting(s) this key can see.\n`);
 
-  const existingKeys = await fetchExistingKeys();
+  if (FORCE_REFRESH) {
+    console.log("FORCE_REFRESH=1 — re-embedding and overwriting every chunk, not just new ones.\n");
+  }
+  const existingKeys = FORCE_REFRESH ? new Set() : await fetchExistingKeys();
 
   const rows = [];
   for (const meeting of meetings) {
