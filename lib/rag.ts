@@ -190,13 +190,20 @@ export async function listFathomCallsByParticipant(
  * The FULL reconstructed content (summary + entire transcript + action
  * items + highlights, not a 300-char snippet) of up to 5 calls whose
  * title matches the query — for when a question needs real detail from
- * one already-identified call.
+ * one already-identified call. Title alone is often not enough: Fathom
+ * auto-titles every unscheduled call "Impromptu Zoom Meeting," so an
+ * optional participant name narrows it to the right one instead of
+ * returning several unrelated calls that happen to share that default.
  */
 export async function getFathomCallContent(
   supabase: any,
-  titleQuery: string
+  titleQuery: string,
+  participantQuery?: string
 ): Promise<{ title: string; call_url: string | null; recorded_at: string | null; content: string }[]> {
-  const { data, error } = await supabase.rpc("get_fathom_call_content", { title_query: titleQuery });
+  const { data, error } = await supabase.rpc("get_fathom_call_content", {
+    title_query: titleQuery,
+    participant_query: participantQuery ?? null,
+  });
   if (error) {
     console.error("[getFathomCallContent]", error.message);
     return [];
@@ -232,10 +239,22 @@ const FATHOM_TOOLS = [
       "Get the FULL content — summary, entire transcript, action items, highlights — of one specific " +
       "call by its title or a distinctive phrase from it. The context you're given up front is only ever " +
       "a short excerpt of whichever chunk ranked closest; use this whenever a question needs real detail, " +
-      "specifics, or action items from one identifiable call rather than just what's already in front of you.",
+      "specifics, or action items from one identifiable call rather than just what's already in front of you. " +
+      "IMPORTANT: Fathom auto-titles every unscheduled call \"Impromptu Zoom Meeting\" — a generic default, " +
+      "not a real name — so title alone can match several unrelated calls. Whenever you already know who was " +
+      "on the call (from earlier context, or the question itself names a person/company), always pass " +
+      "participant too so you get the right one, not a guess. If results still come back covering more than " +
+      "one clearly different call and you can't tell which is meant, say so and ask which one rather than " +
+      "picking one or blending details across them.",
     input_schema: {
       type: "object",
-      properties: { title: { type: "string", description: "The call's title, or a distinctive phrase from it" } },
+      properties: {
+        title: { type: "string", description: "The call's title, or a distinctive phrase from it" },
+        participant: {
+          type: "string",
+          description: "Optional — a person or company on the call, to disambiguate when the title is generic",
+        },
+      },
       required: ["title"],
     },
   },
@@ -253,8 +272,20 @@ async function runFathomTool(supabase: any, name: string, input: Record<string, 
       .join("\n");
   }
   if (name === "get_full_call") {
-    const rows = await getFathomCallContent(supabase, String(input.title ?? ""));
-    if (rows.length === 0) return "No call found matching that title.";
+    const rows = await getFathomCallContent(
+      supabase,
+      String(input.title ?? ""),
+      input.participant ? String(input.participant) : undefined
+    );
+    if (rows.length === 0) return "No call found matching that title/participant.";
+    if (rows.length > 1) {
+      return (
+        `Found ${rows.length} different calls matching that title — these may not all be the same call ` +
+        `(Fathom reuses generic titles like "Impromptu Zoom Meeting"). Don't blend them; check which one ` +
+        `actually matches before answering, or ask which one is meant:\n\n` +
+        rows.map((r) => `=== ${r.title ?? "Untitled call"} (${r.recorded_at ?? "unknown date"}) ===\n${r.content}`).join("\n\n---\n\n")
+      );
+    }
     return rows.map((r) => `=== ${r.title ?? "Untitled call"} ===\n${r.content}`).join("\n\n---\n\n");
   }
   return "Unknown tool.";
