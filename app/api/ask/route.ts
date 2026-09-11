@@ -103,6 +103,7 @@ export async function POST(req: NextRequest) {
         context: matches,
         history: history.map((h) => ({ role: h.role, content: h.content })),
         question: message,
+        supabase,
       });
 
       if (identity.userId) {
@@ -127,6 +128,7 @@ export async function POST(req: NextRequest) {
       context: matches,
       history: history.map((h) => ({ role: h.role, content: h.content })),
       question: message,
+      supabase,
     });
 
     // Persistent memory — both best-effort, never lets a failure here affect

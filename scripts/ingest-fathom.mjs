@@ -376,6 +376,7 @@ async function main() {
       title: r.meeting.title,
       call_url: r.meeting.url,
       recorded_at: r.meeting.recordedAt,
+      participants: r.meeting.participants,
       content: r.text,
       embedding: embeddings[i],
     }));

@@ -167,44 +167,187 @@ function formatContextBlock(context: KnowledgeMatch[]): string {
     .join("\n\n");
 }
 
+/**
+ * Every Fathom call (deduped from its many chunk rows) whose participants
+ * include a name matching the query — for "who have I talked to" / "what
+ * calls have I had with X." A real lookup, not a similarity guess: see
+ * supabase/migrations/0007_fathom_structured_lookup.sql for why this
+ * needed to exist as its own thing.
+ */
+export async function listFathomCallsByParticipant(
+  supabase: any,
+  nameQuery: string
+): Promise<{ title: string; call_url: string | null; recorded_at: string | null; participants: string[] }[]> {
+  const { data, error } = await supabase.rpc("list_fathom_calls_by_participant", { name_query: nameQuery });
+  if (error) {
+    console.error("[listFathomCallsByParticipant]", error.message);
+    return [];
+  }
+  return data ?? [];
+}
+
+/**
+ * The FULL reconstructed content (summary + entire transcript + action
+ * items + highlights, not a 300-char snippet) of up to 5 calls whose
+ * title matches the query — for when a question needs real detail from
+ * one already-identified call.
+ */
+export async function getFathomCallContent(
+  supabase: any,
+  titleQuery: string
+): Promise<{ title: string; call_url: string | null; recorded_at: string | null; content: string }[]> {
+  const { data, error } = await supabase.rpc("get_fathom_call_content", { title_query: titleQuery });
+  if (error) {
+    console.error("[getFathomCallContent]", error.message);
+    return [];
+  }
+  return data ?? [];
+}
+
+/**
+ * Tools given to Claude alongside the similarity-search context — an
+ * escape hatch for exactly the question shapes similarity search can't
+ * answer: "list every call with X" and "give me everything from this
+ * call," not just "find content similar to this question." Safe to
+ * always include regardless of workspace — Claude only calls them when
+ * it decides they're relevant, so a Tech question never touches these.
+ */
+const FATHOM_TOOLS = [
+  {
+    name: "list_calls_by_participant",
+    description:
+      "Find which recorded calls involved a specific person or company by name — for questions like " +
+      "'who have I talked to' or 'what calls have I had with X'. Returns a real list, not a similarity " +
+      "guess. Do NOT use this to ask what was discussed on one already-identified call — use " +
+      "get_full_call for that instead.",
+    input_schema: {
+      type: "object",
+      properties: { name: { type: "string", description: "Person or company name to search for" } },
+      required: ["name"],
+    },
+  },
+  {
+    name: "get_full_call",
+    description:
+      "Get the FULL content — summary, entire transcript, action items, highlights — of one specific " +
+      "call by its title or a distinctive phrase from it. The context you're given up front is only ever " +
+      "a short excerpt of whichever chunk ranked closest; use this whenever a question needs real detail, " +
+      "specifics, or action items from one identifiable call rather than just what's already in front of you.",
+    input_schema: {
+      type: "object",
+      properties: { title: { type: "string", description: "The call's title, or a distinctive phrase from it" } },
+      required: ["title"],
+    },
+  },
+];
+
+async function runFathomTool(supabase: any, name: string, input: Record<string, unknown>): Promise<string> {
+  if (name === "list_calls_by_participant") {
+    const rows = await listFathomCallsByParticipant(supabase, String(input.name ?? ""));
+    if (rows.length === 0) return "No calls found matching that name.";
+    return rows
+      .map((r) => {
+        const date = r.recorded_at ? new Date(r.recorded_at).toISOString().slice(0, 10) : "unknown date";
+        return `- ${r.title ?? "Untitled call"} (${date})${r.call_url ? ` — ${r.call_url}` : ""}`;
+      })
+      .join("\n");
+  }
+  if (name === "get_full_call") {
+    const rows = await getFathomCallContent(supabase, String(input.title ?? ""));
+    if (rows.length === 0) return "No call found matching that title.";
+    return rows.map((r) => `=== ${r.title ?? "Untitled call"} ===\n${r.content}`).join("\n\n---\n\n");
+  }
+  return "Unknown tool.";
+}
+
+const MAX_TOOL_ITERATIONS = 4;
+
+/**
+ * Shared by composeAnswer and composeReport: calls Claude, and if it asks
+ * to use one of FATHOM_TOOLS, runs it and feeds the result back — looping
+ * (bounded) until Claude gives a final text answer instead of another
+ * tool call. Pass no `supabase` to skip tools entirely (answers from the
+ * given context alone, same behavior as before tools existed).
+ */
+async function callAnthropicWithTools(opts: {
+  apiKey: string;
+  system: string;
+  messages: unknown[];
+  maxTokens: number;
+  supabase?: any;
+}): Promise<any> {
+  const messages = [...opts.messages];
+  let data: any;
+
+  for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": opts.apiKey,
+        "anthropic-version": "2023-06-01",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: ANSWER_MODEL,
+        max_tokens: opts.maxTokens,
+        system: opts.system,
+        messages,
+        ...(opts.supabase ? { tools: FATHOM_TOOLS } : {}),
+      }),
+    });
+
+    if (!res.ok) throw new Error(`Answer generation failed: ${res.status}`);
+    data = await res.json();
+
+    if (data.stop_reason !== "tool_use" || !opts.supabase) break;
+
+    const toolUseBlocks = (data.content ?? []).filter((b: { type: string }) => b.type === "tool_use");
+    if (toolUseBlocks.length === 0) break;
+
+    messages.push({ role: "assistant", content: data.content });
+    const toolResults = await Promise.all(
+      toolUseBlocks.map(async (block: { id: string; name: string; input: Record<string, unknown> }) => ({
+        type: "tool_result",
+        tool_use_id: block.id,
+        content: await runFathomTool(opts.supabase, block.name, block.input),
+      }))
+    );
+    messages.push({ role: "user", content: toolResults });
+  }
+
+  return data;
+}
+
+/** Anthropic's response can include non-text blocks (e.g. thinking) ahead of the actual answer. */
+function extractText(data: any): string {
+  return (data.content ?? [])
+    .filter((block: { type: string; text?: string }) => block.type === "text")
+    .map((block: { text?: string }) => block.text ?? "")
+    .join("\n")
+    .trim();
+}
+
 export async function composeAnswer(opts: {
   systemPrompt: string;
   context: KnowledgeMatch[];
   history: { role: "user" | "assistant"; content: string }[];
   question: string;
+  /** Enables the Fathom lookup tools above — omit to answer from context alone, same as before. */
+  supabase?: any;
 }) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not configured");
 
   const contextBlock = formatContextBlock(opts.context);
-
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: ANSWER_MODEL,
-      max_tokens: 1024,
-      system: `${opts.systemPrompt}\n\nContext:\n${contextBlock}`,
-      messages: [...opts.history, { role: "user", content: opts.question }],
-    }),
+  const data = await callAnthropicWithTools({
+    apiKey,
+    system: `${opts.systemPrompt}\n\nContext:\n${contextBlock}`,
+    messages: [...opts.history, { role: "user", content: opts.question }],
+    maxTokens: 1024,
+    supabase: opts.supabase,
   });
 
-  if (!res.ok) throw new Error(`Answer generation failed: ${res.status}`);
-  const data = await res.json();
-
-  // Anthropic's response can include non-text blocks (e.g. thinking) ahead
-  // of the actual answer — content[0] isn't reliably the text block, so
-  // grab every text block instead of assuming position.
-  const text = (data.content ?? [])
-    .filter((block: { type: string; text?: string }) => block.type === "text")
-    .map((block: { text?: string }) => block.text ?? "")
-    .join("\n")
-    .trim();
-
+  const text = extractText(data);
   if (!text) {
     console.error("[composeAnswer] no text block in response", JSON.stringify(data).slice(0, 500));
     return "I found relevant context but couldn't compose an answer from it — try rephrasing the question.";
@@ -223,6 +366,8 @@ export async function composeReport(opts: {
   context: KnowledgeMatch[];
   history: { role: "user" | "assistant"; content: string }[];
   question: string;
+  /** Enables the Fathom lookup tools — same as composeAnswer's, e.g. for "write a report on my calls with X." */
+  supabase?: any;
 }): Promise<{ title: string; summary: string; markdown: string }> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not configured");
@@ -238,30 +383,15 @@ export async function composeReport(opts: {
     "<the full report body as Markdown: use ## headings to break it into sections, plain paragraphs, bold, and bullet/numbered lists where useful. Don't repeat the title as a heading. Keep formatting simple — no tables, no nested lists.>",
   ].join("\n");
 
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: ANSWER_MODEL,
-      max_tokens: 4096,
-      system: `${opts.systemPrompt}\n\n${reportInstructions}\n\nContext:\n${contextBlock}`,
-      messages: [...opts.history, { role: "user", content: opts.question }],
-    }),
+  const data = await callAnthropicWithTools({
+    apiKey,
+    system: `${opts.systemPrompt}\n\n${reportInstructions}\n\nContext:\n${contextBlock}`,
+    messages: [...opts.history, { role: "user", content: opts.question }],
+    maxTokens: 4096,
+    supabase: opts.supabase,
   });
 
-  if (!res.ok) throw new Error(`Report generation failed: ${res.status}`);
-  const data = await res.json();
-
-  const text = (data.content ?? [])
-    .filter((block: { type: string; text?: string }) => block.type === "text")
-    .map((block: { text?: string }) => block.text ?? "")
-    .join("\n")
-    .trim();
-
+  const text = extractText(data);
   if (!text) {
     console.error("[composeReport] no text block in response", JSON.stringify(data).slice(0, 500));
     return {
