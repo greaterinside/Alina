@@ -18,9 +18,19 @@ const REPEL_RADIUS = 100; // px — cursor influence radius
 const REPEL_FORCE = 8; // strength of repulsion
 
 const WELCOME_TEXT = "Hi, I'm Alina";
-const SESSION_KEY = "alina-particle-intro-shown";
+export const PARTICLE_INTRO_SESSION_KEY = "alina-particle-intro-shown";
 
-export function ParticleField({ className }: { className?: string }) {
+export function ParticleField({
+  className,
+  onIntroDone,
+}: {
+  className?: string;
+  /** Fires once the welcome text has fully dissolved back into the sphere
+   *  — or immediately, if the intro already played earlier this session.
+   *  Used to hold the rest of the chat UI back so it never renders as
+   *  text-over-text with the particle-formed greeting. */
+  onIntroDone?: () => void;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -122,7 +132,10 @@ export function ParticleField({ className }: { className?: string }) {
       });
       lines.push(currentLine.trim());
 
-      let fs = Math.min((cW * 0.72) / (maxChars * 0.5), (cH * 0.5) / lines.length, 180);
+      // Sized to actually dominate the screen as a splash moment, not
+      // sit as modest text — the original divisor left "Hi, I'm Alina"
+      // reading small and easy to miss on a full-viewport canvas.
+      let fs = Math.min((cW * 0.92) / (maxChars * 0.34), (cH * 0.6) / lines.length, 320);
       if (phrase.length > 30) fs *= 0.8;
 
       c2.fillStyle = "#fff";
@@ -302,24 +315,30 @@ export function ParticleField({ className }: { className?: string }) {
 
     let alreadyShown = true;
     try {
-      alreadyShown = sessionStorage.getItem(SESSION_KEY) === "1";
+      alreadyShown = sessionStorage.getItem(PARTICLE_INTRO_SESSION_KEY) === "1";
     } catch {
       alreadyShown = true;
     }
 
     const timers: ReturnType<typeof setTimeout>[] = [];
     if (!alreadyShown) {
+      // Held much longer than before (was 2.6s, felt like a blip) — this
+      // is meant to be a real "arrival" moment, not a flash.
+      const HOLD_MS = 5200;
       timers.push(setTimeout(() => formWord(WELCOME_TEXT), 700));
       timers.push(
         setTimeout(() => {
           resetToSphere();
           try {
-            sessionStorage.setItem(SESSION_KEY, "1");
+            sessionStorage.setItem(PARTICLE_INTRO_SESSION_KEY, "1");
           } catch {
             // worst case it replays once more this browser
           }
-        }, 700 + 2600)
+          onIntroDone?.();
+        }, 700 + HOLD_MS)
       );
+    } else {
+      onIntroDone?.();
     }
 
     return () => {
@@ -329,6 +348,10 @@ export function ParticleField({ className }: { className?: string }) {
       document.documentElement.removeEventListener("mouseleave", handleMouseLeave);
       timers.forEach(clearTimeout);
     };
+    // Mount-once by design (the whole particle simulation lives in this
+    // effect's closure) — onIntroDone is read once, not meant to re-run
+    // the effect if the caller passes a new function identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (

@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Volume2, VolumeX, Trash2 } from "lucide-react";
 import clsx from "clsx";
-import { ParticleField } from "@/components/mascot/ParticleField";
+import { ParticleField, PARTICLE_INTRO_SESSION_KEY } from "@/components/mascot/ParticleField";
 import { WorkspaceTabs } from "@/components/ask/WorkspaceTabs";
 import { ModeToggle } from "@/components/ask/ModeToggle";
 import { Composer } from "@/components/ask/Composer";
@@ -48,6 +48,20 @@ export function AskScreen({
   const [openReport, setOpenReport] = useState<ReportDoc | null>(null);
   const [loadedWorkspaces, setLoadedWorkspaces] = useState<Set<WorkspaceId>>(new Set());
   const [historyLoading, setHistoryLoading] = useState(false);
+  // Holds the greeting/chips back until the particle intro has fully
+  // dissolved back into the sphere, so the two never render as text over
+  // text. Starts `true` (matches what SSR renders, since sessionStorage
+  // doesn't exist server-side) and gets corrected — before paint, via
+  // useLayoutEffect, not useEffect — the moment the client can actually
+  // check whether the intro already played this session.
+  const [introDone, setIntroDone] = useState(true);
+  useLayoutEffect(() => {
+    try {
+      if (sessionStorage.getItem(PARTICLE_INTRO_SESSION_KEY) !== "1") setIntroDone(false);
+    } catch {
+      // sessionStorage unavailable — just show the greeting immediately
+    }
+  }, []);
 
   const threadRef = useRef<HTMLDivElement>(null);
   const { speak, error: speechError, supported: speechSupported } = useSpeech();
@@ -207,7 +221,7 @@ export function AskScreen({
 
   return (
     <div className="relative flex h-full flex-col overflow-hidden bg-[#05050f]">
-      <ParticleField />
+      <ParticleField onIntroDone={() => setIntroDone(true)} />
       <div className="relative z-10 flex h-full flex-col">
       {deniedWorkspace && (
         <div className="flex-none border-b border-terracotta/25 bg-terracotta/15 px-6 py-2.5 text-[12.5px] text-[#ffb088]">
@@ -252,7 +266,14 @@ export function AskScreen({
         <>
           <div ref={threadRef} className="flex-1 overflow-y-auto px-6 py-6">
             {messages.length === 0 && historyLoading ? null : messages.length === 0 ? (
-              <EmptyState workspace={workspace} mode={mode} onPick={send} />
+              <div
+                className={clsx(
+                  "h-full transition-opacity duration-700",
+                  introDone ? "opacity-100" : "opacity-0"
+                )}
+              >
+                <EmptyState workspace={workspace} mode={mode} onPick={send} />
+              </div>
             ) : (
               <div className="mx-auto flex max-w-2xl flex-col gap-4">
                 {messages.map((m) => (
@@ -295,7 +316,14 @@ export function AskScreen({
         <>
           <div className="flex-1 overflow-y-auto px-6 py-6">
             {typingPairs.length === 0 && historyLoading ? null : typingPairs.length === 0 && !loading ? (
-              <EmptyState workspace={workspace} mode={mode} onPick={send} />
+              <div
+                className={clsx(
+                  "h-full transition-opacity duration-700",
+                  introDone ? "opacity-100" : "opacity-0"
+                )}
+              >
+                <EmptyState workspace={workspace} mode={mode} onPick={send} />
+              </div>
             ) : (
               <div className="mx-auto flex max-w-2xl flex-col gap-4">
                 {typingPairs.map((pair) => (
