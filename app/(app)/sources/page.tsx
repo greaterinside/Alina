@@ -27,13 +27,20 @@ export default async function SourcesPage() {
               <p className="min-h-[40px] text-[12.5px] leading-relaxed text-charcoal/55">
                 {c.description}
               </p>
-              <button
-                disabled
-                title="Connector setup is next up — not wired to a real OAuth flow yet"
-                className="btn-ghost mt-auto w-full cursor-not-allowed py-2 text-[12.5px] opacity-50"
-              >
-                Connect {c.name}
-              </button>
+              {c.connected ? (
+                <span className="mt-auto flex items-center justify-center gap-1.5 rounded-full bg-emerald-50 py-2 text-[12.5px] font-medium text-emerald-700">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                  Connected
+                </span>
+              ) : (
+                <button
+                  disabled
+                  title="Connector setup is next up — not wired to a real OAuth flow yet"
+                  className="btn-ghost mt-auto w-full cursor-not-allowed py-2 text-[12.5px] opacity-50"
+                >
+                  Connect {c.name}
+                </button>
+              )}
             </div>
           ))}
         </div>

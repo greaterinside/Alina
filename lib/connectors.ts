@@ -1,12 +1,11 @@
 import type { SourceConnector } from "@/lib/types";
 
 /**
- * The connectors Sources should offer. None are marked connected here —
- * per the brief, only show "connected" once a connector is genuinely
- * wired up (a real OAuth grant stored server-side), never as placeholder
- * data. When a connector's integration ships, flip its `connected` check
- * to read real state (e.g. a row in a `connections` table) instead of
- * the hardcoded `false` below.
+ * The connectors Sources should offer. `connected` is computed below from
+ * real server-side credentials, per the brief's "only show connected once
+ * a connector is genuinely wired up" — never hardcoded true. A connector
+ * with no ingestion script yet (zoom/gmail/drive/whatsapp) has no entry in
+ * CONNECTOR_ENV_VARS, so it's always false until one exists.
  */
 export const CONNECTORS: Omit<SourceConnector, "connected">[] = [
   { id: "github", name: "GitHub", description: "READMEs, architecture decisions, merged PR descriptions." },
@@ -18,6 +17,16 @@ export const CONNECTORS: Omit<SourceConnector, "connected">[] = [
   { id: "whatsapp", name: "WhatsApp Business", description: "Client chats and voice notes, transcribed." },
 ];
 
+/** Every env var a connector's ingestion script needs — see scripts/ingest-*.mjs. */
+const CONNECTOR_ENV_VARS: Partial<Record<string, string[]>> = {
+  github: ["GITHUB_APP_ID", "GITHUB_APP_PRIVATE_KEY", "GITHUB_INSTALLATION_ID"],
+  fathom: ["FATHOM_API_KEY"],
+  notion: ["NOTION_API_KEY"],
+};
+
 export function getConnectors(): SourceConnector[] {
-  return CONNECTORS.map((c) => ({ ...c, connected: false }));
+  return CONNECTORS.map((c) => ({
+    ...c,
+    connected: (CONNECTOR_ENV_VARS[c.id] ?? []).every((v) => Boolean(process.env[v])),
+  }));
 }

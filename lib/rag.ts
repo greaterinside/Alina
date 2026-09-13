@@ -16,6 +16,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   "tech.notes": "Tech note",
   "tech.meeting_notes": "Meeting notes",
   "tech.github_docs": "GitHub doc",
+  "tech.notion_docs": "Notion page",
   "social.recordings": "Recording",
   "social.fathom_calls": "Call transcript",
   "social.testimonials": "Testimonial",

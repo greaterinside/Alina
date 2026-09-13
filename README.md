@@ -183,6 +183,33 @@ fresh full run — not something to do casually or often):
 FORCE_REFRESH=1 node scripts/ingest-fathom.mjs
 ```
 
+## Notion ingestion
+
+`tech.notion_docs` (see `supabase/migrations/0012_notion_docs.sql`) holds
+project pages, client pages, and SOPs pulled from every page/database
+shared with the Alina Notion integration.
+
+```bash
+node scripts/ingest-notion.mjs
+```
+
+Needs `NOTION_API_KEY` on top of the Supabase/OpenAI keys — generated as an
+**internal** integration at notion.so/my-integrations (no OAuth review,
+since it never leaves your own workspace). It only sees what's explicitly
+shared with it: open a page in Notion, Share -> invite the integration by
+name. Sharing a top-level page shares everything nested under it.
+
+Safe to re-run — incremental by Notion's own `last_edited_time`, so a
+normal re-run only re-fetches/re-embeds pages that actually changed since
+the last run.
+
+Same `match_knowledge` caveat as GitHub and Fathom above: add a
+`tech.notion_docs` branch to the function before this content shows up in
+Ask answers.
+
+Once `NOTION_API_KEY` is set, the Notion card on **Sources** flips to
+"Connected" on its own (see `lib/connectors.ts`) — no separate toggle.
+
 ## Env vars
 
 | Var | Used for |
@@ -194,17 +221,19 @@ FORCE_REFRESH=1 node scripts/ingest-fathom.mjs
 | `ALINA_MODEL` | Optional override for the answer model (default `claude-sonnet-5`) |
 | `GITHUB_APP_ID` / `GITHUB_APP_PRIVATE_KEY` / `GITHUB_INSTALLATION_ID` | `scripts/ingest-github.mjs`'s GitHub App auth |
 | `FATHOM_API_KEY` | `scripts/ingest-fathom.mjs`'s Fathom API auth |
+| `NOTION_API_KEY` | `scripts/ingest-notion.mjs`'s Notion internal integration token |
 | `ELEVENLABS_API_KEY` | `/api/speak` — voice for "Hear this" / auto-speak |
 | `ELEVENLABS_VOICE_ID` | Optional — which ElevenLabs voice to use (defaults to a preset one) |
 
 ## Next up
 
-- Add `tech.github_docs` to `match_knowledge`'s union (see **GitHub
-  ingestion** above), then run the embeddings backfill and the GitHub
-  ingestion script, and verify a real Ask query in each of
-  Tech/Social/Support actually returns matches.
-- Wire Sources' "Connect" buttons to real OAuth flows and flip `connected`
-  in `lib/connectors.ts` to read live state instead of a hardcoded `false`.
+- Add `tech.github_docs`, `social.fathom_calls`, and `tech.notion_docs` to
+  `match_knowledge`'s union (see each ingestion section above), then run
+  the embeddings backfill and each ingestion script, and verify a real Ask
+  query in each of Tech/Social/Support actually returns matches.
+- Wire Sources' remaining "Connect" buttons (Zoom, Gmail, Google Drive,
+  WhatsApp) to real OAuth flows — GitHub, Fathom, and Notion already flip
+  to "Connected" live once their env vars are set (see `lib/connectors.ts`).
 - Build Routing's rule editor and Team's invite/permission editing.
 - Admin UI for editing `workspace_prompts` (today it's DB-only).
 - A trigger/webhook that embeds a row on insert, so new content doesn't
