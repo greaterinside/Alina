@@ -14,7 +14,9 @@ import {
   rememberPersonalFact,
   saveChatExchange,
   SOURCE_LABELS,
+  type KnowledgeMatch,
 } from "@/lib/rag";
+import { getUploadContent } from "@/lib/documents";
 import { WORKSPACES, type WorkspaceId } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -53,11 +55,13 @@ interface AskBody {
   mode: "chat" | "typing" | "report";
   message: string;
   history?: { role: "user" | "assistant"; content: string }[];
+  /** doc_id of a document uploaded earlier this conversation — see the comment above matches below. */
+  recentUploadId?: string;
 }
 
 export async function POST(req: NextRequest) {
   const body = (await req.json()) as AskBody;
-  const { workspace, mode, message, history = [] } = body;
+  const { workspace, mode, message, history = [], recentUploadId } = body;
 
   if (!workspace || !WORKSPACES[workspace] || !message?.trim()) {
     return NextResponse.json({ error: "workspace and message are required" }, { status: 400 });
@@ -97,6 +101,26 @@ export async function POST(req: NextRequest) {
     ]);
 
     const matches = await matchKnowledge(supabase, workspace, embedding);
+
+    // A just-uploaded document is guaranteed context for this question,
+    // not left to similarity search — a vague "what's in this"/"summarize
+    // it" shares almost no vocabulary with the document's own content and
+    // can legitimately score below match_knowledge's relevance floor,
+    // which otherwise silently drops it in favor of a loosely-related
+    // real match. Prepended (not deduped against `matches`) so it's the
+    // first, most prominent thing the model sees.
+    if (recentUploadId) {
+      const upload = await getUploadContent(supabase, recentUploadId);
+      if (upload) {
+        const uploadMatch: KnowledgeMatch = {
+          source_table: "public.uploaded_docs",
+          source_id: recentUploadId,
+          content_snippet: `${upload.filename}:\n${upload.content}`,
+          similarity: 1,
+        };
+        matches.unshift(uploadMatch);
+      }
+    }
 
     const systemPrompt = buildSystemPrompt({
       workspaceLabel: WORKSPACES[workspace].name,

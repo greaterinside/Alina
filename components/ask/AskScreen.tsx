@@ -46,6 +46,12 @@ export function AskScreen({
   const [loading, setLoading] = useState(false);
   const [autoSpeak, setAutoSpeak] = useState(false);
   const [attaching, setAttaching] = useState(false);
+  // Most recently uploaded doc's id, per workspace — sent with the next
+  // question(s) so a just-attached document is guaranteed available as
+  // context rather than left to match_knowledge's similarity search (a
+  // vague "what's in this" shares little vocabulary with the document's
+  // own content and can legitimately score too low to surface otherwise).
+  const [recentUploadByWs, setRecentUploadByWs] = useState<Record<string, string>>({});
   const [openReport, setOpenReport] = useState<ReportDoc | null>(null);
   const [loadedWorkspaces, setLoadedWorkspaces] = useState<Set<WorkspaceId>>(new Set());
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -179,6 +185,7 @@ export function AskScreen({
           mode,
           message: trimmed,
           history: messages.slice(-6),
+          recentUploadId: recentUploadByWs[workspace],
         }),
       });
       const data = await res.json();
@@ -230,6 +237,10 @@ export function AskScreen({
         ? `Couldn't add **${file.name}** — ${data.error}`
         : `Added **${file.name}** to the ${WORKSPACES[workspace].name} knowledge base (${data.chunkCount} ` +
           `chunk${data.chunkCount === 1 ? "" : "s"}) — ask away, it's searchable now.`;
+
+      if (!data.error && data.docId) {
+        setRecentUploadByWs((prev) => ({ ...prev, [workspace]: data.docId }));
+      }
 
       appendMessage(workspace, {
         id: nextId(),

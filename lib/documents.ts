@@ -82,7 +82,7 @@ export async function ingestUpload(opts: {
   kind: "pdf" | "docx" | "txt";
   workspace: WorkspaceId;
   uploadedBy: string | null;
-}): Promise<{ chunkCount: number; charCount: number }> {
+}): Promise<{ chunkCount: number; charCount: number; docId: string }> {
   const text = await extractText(opts.buffer, opts.kind);
   if (!text.trim()) {
     throw new Error("Couldn't find any readable text in that file — is it a scanned image rather than real text?");
@@ -105,5 +105,28 @@ export async function ingestUpload(opts: {
   const { error } = await opts.supabase.from("uploaded_docs").insert(rows);
   if (error) throw new Error(`Couldn't save that document: ${error.message}`);
 
-  return { chunkCount: rows.length, charCount: text.length };
+  return { chunkCount: rows.length, charCount: text.length, docId };
+}
+
+/**
+ * The full content of one upload's chunks, in order — used to guarantee a
+ * just-attached document is actually available to the very next question,
+ * instead of leaving it to match_knowledge's similarity search. A vague
+ * follow-up like "what's in this" or "summarize it" shares almost no
+ * vocabulary with the document's own content, so it can legitimately score
+ * below the relevance floor and get silently dropped otherwise — this
+ * bypasses that entirely for a document the person just uploaded.
+ */
+export async function getUploadContent(
+  supabase: any,
+  docId: string
+): Promise<{ filename: string; content: string } | null> {
+  const { data, error } = await supabase
+    .from("uploaded_docs")
+    .select("filename, content, chunk_index")
+    .eq("doc_id", docId)
+    .order("chunk_index", { ascending: true });
+
+  if (error || !data || data.length === 0) return null;
+  return { filename: data[0].filename, content: data.map((r: { content: string }) => r.content).join("\n\n") };
 }

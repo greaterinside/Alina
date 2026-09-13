@@ -226,6 +226,16 @@ in Ask answers.
 4MB file size cap (`MAX_UPLOAD_BYTES` in `lib/documents.ts`) — matches
 Vercel's serverless request body limit, with room to spare.
 
+A just-uploaded document is also guaranteed context for whatever's asked
+next in that workspace, not left purely to `match_knowledge`'s similarity
+search — a vague "what's in this"/"summarize it" shares almost no
+vocabulary with the document's own content and can legitimately score
+below the relevance floor otherwise. `AskScreen.tsx` remembers the most
+recent upload's `doc_id` per workspace and sends it as `recentUploadId`
+with the next question; `/api/ask` fetches that document's full content
+directly (`getUploadContent` in `lib/documents.ts`) and prepends it to the
+context regardless of similarity score.
+
 ## Live web tools
 
 `lib/rag.ts` gives Claude two more tools alongside the Fathom lookups:

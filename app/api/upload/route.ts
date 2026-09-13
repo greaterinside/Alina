@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const buffer = Buffer.from(await file.arrayBuffer());
-    const { chunkCount, charCount } = await ingestUpload({
+    const { chunkCount, charCount, docId } = await ingestUpload({
       supabase,
       buffer,
       filename: file.name,
@@ -64,6 +64,7 @@ export async function POST(req: NextRequest) {
       workspace,
       chunkCount,
       charCount,
+      docId,
     });
   } catch (err) {
     console.error("[/api/upload]", err);
