@@ -205,6 +205,22 @@ Wired into `match_knowledge`'s union, same as GitHub and Fathom above.
 Once `NOTION_API_KEY` is set, the Notion card on **Sources** flips to
 "Connected" on its own (see `lib/connectors.ts`) — no separate toggle.
 
+## Live web tools
+
+`lib/rag.ts` gives Claude two more tools alongside the Fathom lookups:
+`search_web` (find pages relevant to a query, via Tavily) and `fetch_page`
+(read one page's actual text content). Both are read-only, available in
+every workspace, and Claude only reaches for them when the knowledge base
+genuinely doesn't cover something — a competitor's current pricing,
+today's news, a tool's docs. Needs `TAVILY_API_KEY`; `fetch_page` needs no
+key of its own (it's a direct fetch + text extraction via `cheerio`).
+
+Deliberately no write/action tools (post something, send something, spend
+something) — those have real external consequences and need a
+human-approval step this app doesn't have yet. `fetch_page` also refuses
+anything that isn't a public `http(s)` URL (blocks localhost/private-IP/
+cloud-metadata targets) since the model picks the URL, not a person.
+
 ## Env vars
 
 | Var | Used for |
@@ -217,6 +233,7 @@ Once `NOTION_API_KEY` is set, the Notion card on **Sources** flips to
 | `GITHUB_APP_ID` / `GITHUB_APP_PRIVATE_KEY` / `GITHUB_INSTALLATION_ID` | `scripts/ingest-github.mjs`'s GitHub App auth |
 | `FATHOM_API_KEY` | `scripts/ingest-fathom.mjs`'s Fathom API auth |
 | `NOTION_API_KEY` | `scripts/ingest-notion.mjs`'s Notion internal integration token |
+| `TAVILY_API_KEY` | `search_web` tool in `lib/rag.ts` — live web search during Ask answers |
 | `ELEVENLABS_API_KEY` | `/api/speak` — voice for "Hear this" / auto-speak |
 | `ELEVENLABS_VOICE_ID` | Optional — which ElevenLabs voice to use (defaults to a preset one) |
 

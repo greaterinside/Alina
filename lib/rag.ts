@@ -1,3 +1,4 @@
+import * as cheerio from "cheerio";
 import type { WorkspaceId } from "@/lib/types";
 
 // Switched from Voyage AI after persistent account-access problems.
@@ -354,7 +355,129 @@ const FATHOM_TOOLS = [
   },
 ];
 
-async function runFathomTool(supabase: any, name: string, input: Record<string, unknown>): Promise<string> {
+/**
+ * Read-only live-internet tools — search + fetch, same tool-loop mechanism
+ * as FATHOM_TOOLS above. Deliberately NOT given any write/action tools
+ * (post, send, spend) here: those carry real external consequences
+ * (a public post, money spent on ads) and need a human-approval step this
+ * app doesn't have yet. This pair only ever reads pages back to Alina.
+ */
+const WEB_TOOLS = [
+  {
+    name: "search_web",
+    description:
+      "Search the live web for pages relevant to a query — for anything not already in the knowledge base: a " +
+      "competitor's pricing, current news, a tool's docs, anything time-sensitive or external. Returns a list of " +
+      "titles/URLs/short snippets, NOT full page content — use fetch_page on whichever result URL actually looks " +
+      "relevant to read it in full. Prefer the knowledge base (the context already given to you) for anything about " +
+      "Greater Inside itself; use this for genuinely external/current information instead.",
+    input_schema: {
+      type: "object",
+      properties: { query: { type: "string", description: "The search query" } },
+      required: ["query"],
+    },
+  },
+  {
+    name: "fetch_page",
+    description:
+      "Fetch one specific URL and return its readable text content — for actually reading a page, not just seeing " +
+      "a search snippet of it. Typically used after search_web turns up a promising URL, or when a URL is already " +
+      "known (e.g. from earlier context). Only reads publicly accessible pages — can't log in, click, or fill out " +
+      "forms, and pages that require a login will come back empty or blocked.",
+    input_schema: {
+      type: "object",
+      properties: { url: { type: "string", description: "The exact URL to fetch, including https://" } },
+      required: ["url"],
+    },
+  },
+];
+
+const MAX_FETCHED_PAGE_CHARS = 6000;
+
+/**
+ * Blocks anything that isn't a normal public http(s) URL — the model
+ * chooses this URL, so without this a bad or adversarial query could aim
+ * this server-side fetch at localhost/an internal service/cloud metadata
+ * endpoints instead of the public internet.
+ */
+function isSafePublicUrl(raw: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") return false;
+
+  const host = url.hostname.toLowerCase();
+  if (host === "localhost" || host.endsWith(".local") || host.endsWith(".internal")) return false;
+
+  // Catches IPv4 loopback/private/link-local ranges and the cloud
+  // metadata IP (169.254.169.254 falls under link-local) without needing
+  // a DNS lookup here — good enough for a plain literal-IP URL, which is
+  // the shape an SSRF attempt would actually take.
+  const ipv4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (ipv4) {
+    const [a, b] = ipv4.slice(1).map(Number);
+    if (a === 127 || a === 10 || a === 0 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 169 && b === 254)) {
+      return false;
+    }
+  }
+  if (host === "::1" || host === "[::1]") return false;
+
+  return true;
+}
+
+async function searchWeb(query: string): Promise<string> {
+  const apiKey = process.env.TAVILY_API_KEY;
+  if (!apiKey) return "Web search isn't configured yet (missing TAVILY_API_KEY) — answer from the knowledge base instead, or say this needs to be set up.";
+
+  const res = await fetch("https://api.tavily.com/search", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ api_key: apiKey, query, max_results: 5 }),
+  });
+  if (!res.ok) return `Web search failed (${res.status}) — try again or answer without it.`;
+
+  const data = await res.json();
+  const results = (data.results ?? []) as { title: string; url: string; content: string }[];
+  if (results.length === 0) return "No web results found for that query.";
+
+  return results.map((r) => `- ${r.title}\n  ${r.url}\n  ${r.content.slice(0, 200)}`).join("\n\n");
+}
+
+async function fetchPage(url: string): Promise<string> {
+  if (!isSafePublicUrl(url)) return "That URL can't be fetched — only public http/https pages are allowed.";
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; AlinaBot/1.0; internal knowledge assistant)" },
+      redirect: "follow",
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch (err) {
+    return `Couldn't reach that URL — ${err instanceof Error ? err.message : String(err)}`;
+  }
+  if (!res.ok) return `That page returned ${res.status} — couldn't read it.`;
+
+  const contentType = res.headers.get("content-type") ?? "";
+  if (!contentType.includes("html") && !contentType.includes("text")) {
+    return `That URL isn't a readable page (content-type: ${contentType || "unknown"}).`;
+  }
+
+  const html = await res.text();
+  const $ = cheerio.load(html);
+  $("script, style, nav, footer, noscript, svg").remove();
+  const text = $("body").text().replace(/\s+/g, " ").trim();
+
+  if (!text) return "That page loaded but had no readable text (likely needs JavaScript to render).";
+  return text.slice(0, MAX_FETCHED_PAGE_CHARS);
+}
+
+async function runTool(supabase: any, name: string, input: Record<string, unknown>): Promise<string> {
+  if (name === "search_web") return searchWeb(String(input.query ?? ""));
+  if (name === "fetch_page") return fetchPage(String(input.url ?? ""));
   if (name === "list_calls_by_participant") {
     const rows = await listFathomCallsByParticipant(supabase, String(input.name ?? ""));
     if (rows.length === 0) return "No calls found matching that name.";
@@ -416,10 +539,10 @@ const MAX_TOOL_ITERATIONS = 6;
 
 /**
  * Shared by composeAnswer and composeReport: calls Claude, and if it asks
- * to use one of FATHOM_TOOLS, runs it and feeds the result back — looping
- * (bounded) until Claude gives a final text answer instead of another
- * tool call. Pass no `supabase` to skip tools entirely (answers from the
- * given context alone, same behavior as before tools existed).
+ * to use one of FATHOM_TOOLS or WEB_TOOLS, runs it and feeds the result
+ * back — looping (bounded) until Claude gives a final text answer instead
+ * of another tool call. Pass no `supabase` to skip tools entirely (answers
+ * from the given context alone, same behavior as before tools existed).
  */
 async function callAnthropicWithTools(opts: {
   apiKey: string;
@@ -444,7 +567,7 @@ async function callAnthropicWithTools(opts: {
         max_tokens: opts.maxTokens,
         system: extraSystem ? `${opts.system}\n\n${extraSystem}` : opts.system,
         messages,
-        ...(withTools && opts.supabase ? { tools: FATHOM_TOOLS } : {}),
+        ...(withTools && opts.supabase ? { tools: [...FATHOM_TOOLS, ...WEB_TOOLS] } : {}),
       }),
     });
     if (!res.ok) throw new Error(`Answer generation failed: ${res.status}`);
@@ -481,7 +604,7 @@ async function callAnthropicWithTools(opts: {
       toolUseBlocks.map(async (block: { id: string; name: string; input: Record<string, unknown> }) => ({
         type: "tool_result",
         tool_use_id: block.id,
-        content: await runFathomTool(opts.supabase, block.name, block.input),
+        content: await runTool(opts.supabase, block.name, block.input),
       }))
     );
     messages.push({ role: "user", content: toolResults });
