@@ -45,6 +45,7 @@ export function AskScreen({
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [autoSpeak, setAutoSpeak] = useState(false);
+  const [attaching, setAttaching] = useState(false);
   const [openReport, setOpenReport] = useState<ReportDoc | null>(null);
   const [loadedWorkspaces, setLoadedWorkspaces] = useState<Set<WorkspaceId>>(new Set());
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -209,6 +210,45 @@ export function AskScreen({
     send(promptText);
   }
 
+  // Uploads go straight into the permanent knowledge base (public.uploaded_docs)
+  // via /api/upload, not into this one conversation — so the confirmation/error
+  // just gets posted as a normal assistant message in the current thread rather
+  // than being attached to whatever's typed in the composer.
+  async function uploadDocument(file: File) {
+    if (attaching) return;
+    setAttaching(true);
+
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("workspace", workspace);
+
+      const res = await fetch("/api/upload", { method: "POST", body: form });
+      const data = await res.json();
+
+      const content = data.error
+        ? `Couldn't add **${file.name}** — ${data.error}`
+        : `Added **${file.name}** to the ${WORKSPACES[workspace].name} knowledge base (${data.chunkCount} ` +
+          `chunk${data.chunkCount === 1 ? "" : "s"}) — ask away, it's searchable now.`;
+
+      appendMessage(workspace, {
+        id: nextId(),
+        role: "assistant",
+        content,
+        createdAt: new Date().toISOString(),
+      });
+    } catch {
+      appendMessage(workspace, {
+        id: nextId(),
+        role: "assistant",
+        content: `Couldn't reach the server to upload **${file.name}** — try again in a moment?`,
+        createdAt: new Date().toISOString(),
+      });
+    } finally {
+      setAttaching(false);
+    }
+  }
+
   const typingPairs = useMemo(() => {
     const pairs: { prompt: ChatMessage; answer: ChatMessage }[] = [];
     for (let i = 0; i < messages.length - 1; i++) {
@@ -308,6 +348,8 @@ export function AskScreen({
                 onMic={micSupported ? startMic : undefined}
                 micListening={listening}
                 micSupported={micSupported}
+                onAttach={uploadDocument}
+                attaching={attaching}
               />
             </div>
           </div>
@@ -352,6 +394,8 @@ export function AskScreen({
                 placeholder="Describe what you need drafted — a reply, a summary, a recap…"
                 disabled={loading}
                 multiline
+                onAttach={uploadDocument}
+                attaching={attaching}
               />
             </div>
           </div>

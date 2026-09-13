@@ -205,6 +205,27 @@ Wired into `match_knowledge`'s union, same as GitHub and Fathom above.
 Once `NOTION_API_KEY` is set, the Notion card on **Sources** flips to
 "Connected" on its own (see `lib/connectors.ts`) — no separate toggle.
 
+## Document upload
+
+The paperclip button in the Ask composer (`components/ask/Composer.tsx`)
+lets anyone attach a PDF, Word (`.docx`), or plain text/markdown file —
+`app/api/upload/route.ts` extracts its text (`pdf-parse` / `mammoth`),
+chunks and embeds it, and saves it straight into `public.uploaded_docs`
+(see `supabase/migrations/0013_uploaded_docs.sql`). It's genuinely
+persistent, not a per-conversation attachment: once uploaded, it's part of
+the real knowledge base for that workspace, searchable by anyone, same as
+a Notion page or a GitHub doc — the Ask thread just shows a confirmation
+message ("Added *filename* — N chunks") rather than treating the file as
+part of that one exchange.
+
+Same `match_knowledge` union caveat as every other table above: add a
+`public.uploaded_docs` branch (filtered by its `workspace` column, same
+pattern as `public.conversation_memory`) before uploaded content shows up
+in Ask answers.
+
+4MB file size cap (`MAX_UPLOAD_BYTES` in `lib/documents.ts`) — matches
+Vercel's serverless request body limit, with room to spare.
+
 ## Live web tools
 
 `lib/rag.ts` gives Claude two more tools alongside the Fathom lookups:

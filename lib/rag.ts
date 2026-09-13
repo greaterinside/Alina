@@ -24,6 +24,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   "social.content_prompts": "Content prompt",
   "support.tickets": "Support ticket",
   "public.conversation_memory": "Past answer",
+  "public.uploaded_docs": "Uploaded document",
 };
 
 /** Row shape returned by the real public.match_knowledge Postgres function. */
