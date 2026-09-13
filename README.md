@@ -130,12 +130,11 @@ Supabase/OpenAI keys the backfill script needs — see the script's own
 header comment for what it does and doesn't cover yet (no incremental
 sync cursor, capped at 50 most-recent merged PRs per repo).
 
-**This table isn't wired into `match_knowledge` yet.** That function lives
-in Supabase, not in this repo, and only knows about the original six
-tables — it needs a new branch added for `tech.github_docs` before GitHub
-content shows up in any Ask answer. Pull the function's current definition
-(`select pg_get_functiondef('public.match_knowledge'::regproc);` in the
-SQL Editor) and add the union branch before relying on this.
+Wired into `match_knowledge`'s union — that function lives in Supabase, not
+this repo, so this happened as a manual SQL Editor edit rather than a
+migration file here. If it's ever rebuilt from scratch, pull the current
+definition (`select pg_get_functiondef('public.match_knowledge'::regproc);`)
+and confirm `tech.github_docs` is still in the union.
 
 ## Fathom ingestion
 
@@ -163,9 +162,7 @@ JSON will show which field names to fix in `fetchAllMeetings()`.
 A Fathom API key only sees meetings its owner recorded or that were
 explicitly shared with them — not the whole team's calls automatically.
 
-Same `match_knowledge` caveat as GitHub above: add a
-`social.fathom_calls` branch to the function before this table's content
-shows up in Ask answers.
+Wired into `match_knowledge`'s union, same as GitHub above.
 
 Every chunk is stamped with a short line up front — call title, real
 participant names (pulled from the transcript's own speaker labels, which
@@ -203,9 +200,7 @@ Safe to re-run — incremental by Notion's own `last_edited_time`, so a
 normal re-run only re-fetches/re-embeds pages that actually changed since
 the last run.
 
-Same `match_knowledge` caveat as GitHub and Fathom above: add a
-`tech.notion_docs` branch to the function before this content shows up in
-Ask answers.
+Wired into `match_knowledge`'s union, same as GitHub and Fathom above.
 
 Once `NOTION_API_KEY` is set, the Notion card on **Sources** flips to
 "Connected" on its own (see `lib/connectors.ts`) — no separate toggle.
@@ -227,10 +222,10 @@ Once `NOTION_API_KEY` is set, the Notion card on **Sources** flips to
 
 ## Next up
 
-- Add `tech.github_docs`, `social.fathom_calls`, and `tech.notion_docs` to
-  `match_knowledge`'s union (see each ingestion section above), then run
-  the embeddings backfill and each ingestion script, and verify a real Ask
-  query in each of Tech/Social/Support actually returns matches.
+- Run the embeddings backfill and each ingestion script (GitHub, Fathom,
+  Notion — all three now wired into `match_knowledge`'s union), then
+  verify a real Ask query in each of Tech/Social/Support actually returns
+  matches.
 - Wire Sources' remaining "Connect" buttons (Zoom, Gmail, Google Drive,
   WhatsApp) to real OAuth flows — GitHub, Fathom, and Notion already flip
   to "Connected" live once their env vars are set (see `lib/connectors.ts`).
