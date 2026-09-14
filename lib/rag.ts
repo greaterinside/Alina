@@ -138,7 +138,15 @@ export function buildSystemPrompt(opts: {
       "everything that exists on a topic, especially for anything structured (a date range, a specific person, " +
       "an exact count) — a tool built for that shape of question will give a real, complete answer where the " +
       "context might easily be missing the actual relevant items entirely. Reach for the matching tool BEFORE " +
-      "concluding \"there's nothing\" or listing only what happens to be in the initial context.",
+      "concluding \"there's nothing\" or listing only what happens to be in the initial context. And once a " +
+      "tool result comes back, trust IT, completely — a tool result empty or not, for the exact range/filter " +
+      "asked, is real and correct; the leftover initial context is not a fallback or a supplement to blend in " +
+      "alongside it. NEVER turn \"the tool found nothing in this range\" into a claim like \"that's the only " +
+      "content in the whole database\" or \"here's everything else that exists instead\" using whatever " +
+      "unrelated items happened to be in the initial context — a tool only ever checked the specific thing " +
+      "asked, never the whole source, and the initial context is a similarity snippet, not an inventory. If a " +
+      "date-range tool comes back empty, the correct answer is exactly that — nothing in that range — and " +
+      "nothing more.",
     "Answer directly and plainly — no inline citation markers or source tags, just the answer itself.",
     "Be warm, direct, and useful — never corporate or vague.",
     "Exception to \"no source tags\": if context includes a call's \"watch:\" link and the answer is " +
@@ -427,7 +435,11 @@ const NOTION_TOOLS = [
       "missing the ones that genuinely are in range — answering from it directly for a date question gives a " +
       "wrong or misleadingly incomplete answer even when it looks plausible. Call this tool first, always, for " +
       "this question shape. Only rows with a date property set are ever returned; use normal context/search " +
-      "instead for anything that isn't a date-range question.",
+      "instead for anything that isn't a date-range question. If this comes back empty, that means exactly and " +
+      "only \"nothing found in that specific range\" — never reinterpret an empty result as \"here's everything " +
+      "in the whole database instead\" by falling back to whatever unrelated campaign-shaped items happened to " +
+      "be in the initial context (that's the exact wrong-answer pattern this tool exists to prevent). State " +
+      "plainly that nothing's scheduled in the asked range and stop there.",
     input_schema: {
       type: "object",
       properties: {
