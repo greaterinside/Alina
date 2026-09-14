@@ -132,7 +132,13 @@ export function buildSystemPrompt(opts: {
     // Without this, relative dates ("this month," "recently," "last week")
     // are unanswerable — the model has no other way to know what "now" is.
     `Today's date is ${new Date().toISOString().slice(0, 10)}.`,
-    "Answer only from the provided context. If the context doesn't cover it, say so plainly instead of guessing.",
+    "Answer from the provided context, or from a tool call when one of the available tools is a better fit for " +
+      "the question (see each tool's own description for when to use it) — never guess. The context below is " +
+      "only ever a similarity-ranked snippet of a few results; it is NOT a complete or reliable picture of " +
+      "everything that exists on a topic, especially for anything structured (a date range, a specific person, " +
+      "an exact count) — a tool built for that shape of question will give a real, complete answer where the " +
+      "context might easily be missing the actual relevant items entirely. Reach for the matching tool BEFORE " +
+      "concluding \"there's nothing\" or listing only what happens to be in the initial context.",
     "Answer directly and plainly — no inline citation markers or source tags, just the answer itself.",
     "Be warm, direct, and useful — never corporate or vague.",
     "Exception to \"no source tags\": if context includes a call's \"watch:\" link and the answer is " +
@@ -414,8 +420,14 @@ const NOTION_TOOLS = [
       "'what's on the content calendar this month.' Use today's date (given above) to work out the actual range " +
       "for relative phrases like 'this week' or 'next month'. Returns title, date, and a content snippet for each " +
       "matching row — NOT a similarity search, so it reliably catches everything in range regardless of wording. " +
-      "Only rows that have a date property set are ever returned; use normal context/search instead for anything " +
-      "that isn't a date-range question.",
+      "IMPORTANT: for ANY question shaped like this, call this tool BEFORE answering — do not answer from the " +
+      "context you were already given instead. That initial context is a similarity-ranked snippet of only a " +
+      "few results and will often contain campaign-shaped items that are NOT actually in the asked-about date " +
+      "range (e.g. a Cyber Monday entry months away, just because it's semantically close to \"campaign\") while " +
+      "missing the ones that genuinely are in range — answering from it directly for a date question gives a " +
+      "wrong or misleadingly incomplete answer even when it looks plausible. Call this tool first, always, for " +
+      "this question shape. Only rows with a date property set are ever returned; use normal context/search " +
+      "instead for anything that isn't a date-range question.",
     input_schema: {
       type: "object",
       properties: {
