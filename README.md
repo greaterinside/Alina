@@ -250,6 +250,33 @@ Real data back means it's this search quirk (add it to `NOTION_EXTRA_IDS`);
 a 404/"could not find" means it's a genuine sharing gap instead (Share it
 with the integration in Notion).
 
+**Runs automatically now — nobody should ever need to run the script by
+hand.** `app/api/cron/sync-notion/route.ts` calls the same pipeline
+(`lib/notion-sync.ts`, a straight port of `scripts/ingest-notion.mjs`'s
+logic for use inside the app) on Vercel's own cron schedule — see
+`vercel.json` (`*/30 * * * *`, every 30 minutes; change the schedule
+there, standard 5-field cron). Needs `CRON_SECRET` set as an env var —
+Vercel signs its own cron requests with that exact value as a Bearer
+token, which is what stops this from being a public URL anyone could hit
+to trigger a real (embedding-cost-bearing) sync run:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+Put the same value in `CRON_SECRET` on Vercel (Project Settings →
+Environment Variables) — the schedule itself only takes effect once this
+is deployed there (Vercel reads `vercel.json` from the deployed branch,
+not from a local checkout).
+
+`lib/notion-sync.ts` is a genuinely separate copy of the ingestion logic
+from `scripts/ingest-notion.mjs`, not a shared import — one runs as a
+plain Node script (with `FORCE_REFRESH`/`NOTION_DEBUG` for manual/local
+use), the other inside Next.js on Vercel's schedule. Keep them in sync by
+hand if the ingestion logic changes. The manual script is still there for
+local debugging and one-off `FORCE_REFRESH` backfills after an ingestion
+logic change — the cron route only ever runs incrementally.
+
 ## Document upload
 
 The paperclip button in the Ask composer (`components/ask/Composer.tsx`)
@@ -334,6 +361,7 @@ cloud-metadata targets) since the model picks the URL, not a person.
 | `NOTION_API_KEY` | `scripts/ingest-notion.mjs`'s Notion internal integration token |
 | `NOTION_EXTRA_IDS` | Optional — comma-separated page/database ids search doesn't surface (see Notion ingestion above) |
 | `TAVILY_API_KEY` | `search_web` tool in `lib/rag.ts` — live web search during Ask answers |
+| `CRON_SECRET` | Authenticates Vercel's calls to `/api/cron/sync-notion` (see Notion ingestion above) |
 | `ELEVENLABS_API_KEY` | `/api/speak` — voice for "Hear this" / auto-speak |
 | `ELEVENLABS_VOICE_ID` | Optional — which ElevenLabs voice to use (defaults to a preset one) |
 
