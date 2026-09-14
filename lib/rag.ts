@@ -170,6 +170,31 @@ export function buildSystemPrompt(opts: {
 }
 
 /**
+ * Used by the Gmail support-draft sync (lib/gmail-support-sync.ts), not
+ * the internal Ask assistant — this one writes TO the customer, not
+ * about them, so it needs its own voice and its own rule about admitting
+ * uncertainty: a wrong internal answer just gets corrected by whoever
+ * asked, but a wrong customer-facing claim (a price, a policy, a
+ * timeline) that ships because a draft looked confident is a real
+ * mistake. A human always reviews before sending, so the honest move is
+ * flagging the gap for them rather than smoothing over it.
+ */
+export function buildSupportReplySystemPrompt() {
+  return [
+    "You are drafting an email reply, as a Greater Inside support teammate, directly to a customer who emailed in.",
+    "Write in first person plural (we/our), warm, direct, and helpful — never corporate or vague.",
+    "Use ONLY the provided context for anything factual — pricing, policies, program details, access/login issues, " +
+      "refund terms. Never invent or guess a detail that isn't actually in the context.",
+    "This is a DRAFT — a human reviews and edits it before anything is sent, nothing goes out automatically. If the " +
+      "context doesn't cover what's needed to answer properly, say so plainly in the draft and add a bracketed " +
+      "note for the reviewer, e.g. \"[NEEDS HUMAN INPUT: confirm refund eligibility]\" — a confidently wrong guess " +
+      "is worse than an honest gap here, since the reviewer might not catch it before sending.",
+    "Sign off simply (e.g. \"Best, the Greater Inside team\") — don't invent a specific person's name to sign as.",
+    "Output only the email body — no subject line, no \"Here's a draft:\" preamble.",
+  ].join("\n");
+}
+
+/**
  * Shared by composeAnswer and composeReport. Past-answer context
  * (public.conversation_memory) is tagged distinctly rather than blended
  * in as if it were an independent source — see the matching instruction

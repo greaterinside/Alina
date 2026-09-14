@@ -331,6 +331,59 @@ embeddings involved, so it reliably catches everything in range
 regardless of wording. Needs a `FORCE_REFRESH=1` ingestion run once after
 this migration to backfill `row_date` on rows ingested before it existed.
 
+## Gmail support drafting
+
+`app/api/cron/gmail-draft-replies` (schedule in `vercel.json`, same
+`CRON_SECRET` bearer-auth pattern as `/api/cron/sync-notion`) polls the
+support inbox's unread mail every 10 minutes. For each unread message not
+already in `support.tickets`: reads it (`lib/gmail.ts`), looks up relevant
+knowledge across every workspace (`matchKnowledge` with `workspace:
+"assistant"`, i.e. no filter), drafts a reply with Alina
+(`buildSupportReplySystemPrompt` in `lib/rag.ts` — a distinct, customer-
+facing voice from the internal Ask assistant's), saves the ticket, and
+creates a real Gmail draft on that thread (`createDraftReply`) — visible
+in the actual inbox exactly like a human had started typing a reply. A
+person always reviews and sends it themselves; nothing in this codebase
+ever calls Gmail's `drafts.send` or `messages.send`.
+
+`support.tickets` (`customer_email`, `customer_name`, `question`,
+`drafted_reply`, `status`, `embedding`, ...) already existed before this
+rebuild — it's one of `match_knowledge`'s original six tables (see
+**Embeddings backfill** below) — just missing the columns to identify
+which Gmail message/thread a row came from. `supabase/migrations/
+0015_tickets_gmail_columns.sql` adds `gmail_message_id` (unique, used to
+skip messages already drafted), `gmail_thread_id`, and `subject`.
+
+**Auth is single-mailbox OAuth, not domain-wide delegation** — a
+deliberate choice to start with the smallest trust ask rather than a
+Workspace-admin-level grant that can impersonate every mailbox in the
+domain. Adding a second inbox later means repeating the one-time consent
+step below for that mailbox; if/when there are many inboxes, domain-wide
+delegation (a Workspace admin granting a service account delegated access
+in Google's Admin console) trades that repeated consent for a bigger
+up-front trust grant. Scopes are `gmail.readonly` + `gmail.compose`;
+there's no narrower Gmail scope that permits creating drafts without also
+technically permitting `drafts.send` — the real safety boundary is that no
+code path here calls it, not the OAuth grant itself.
+
+One-time setup:
+1. In Google Cloud Console: enable the Gmail API, create an OAuth 2.0
+   client (type "Web application"), and add a redirect URI matching
+   `GMAIL_REDIRECT_URI` exactly (e.g.
+   `https://alina-beta-five.vercel.app/api/gmail/oauth/callback`).
+2. Set `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, `GMAIL_REDIRECT_URI` (not
+   `GMAIL_REFRESH_TOKEN` yet) and deploy.
+3. Visit `/api/gmail/oauth/start` yourself, signed into
+   `support@greaterinside.com`'s Google account, and go through Google's
+   consent screen.
+4. It lands on `/api/gmail/oauth/callback`, which shows a refresh token
+   once, in plain text — paste that into `GMAIL_REFRESH_TOKEN` and
+   redeploy. Nothing here stores it automatically.
+
+Once all three `GMAIL_*` credentials are set, the Gmail card on
+**Sources** flips to "Connected" on its own, same as every other
+connector (`lib/connectors.ts`).
+
 ## Live web tools
 
 `lib/rag.ts` gives Claude two more tools alongside the Fathom lookups:
@@ -361,7 +414,8 @@ cloud-metadata targets) since the model picks the URL, not a person.
 | `NOTION_API_KEY` | `scripts/ingest-notion.mjs`'s Notion internal integration token |
 | `NOTION_EXTRA_IDS` | Optional — comma-separated page/database ids search doesn't surface (see Notion ingestion above) |
 | `TAVILY_API_KEY` | `search_web` tool in `lib/rag.ts` — live web search during Ask answers |
-| `CRON_SECRET` | Authenticates Vercel's calls to `/api/cron/sync-notion` (see Notion ingestion above) |
+| `CRON_SECRET` | Authenticates Vercel's calls to `/api/cron/sync-notion` and `/api/cron/gmail-draft-replies` |
+| `GMAIL_CLIENT_ID` / `GMAIL_CLIENT_SECRET` / `GMAIL_REFRESH_TOKEN` / `GMAIL_REDIRECT_URI` | Gmail support-inbox drafting (see Gmail support drafting above) |
 | `ELEVENLABS_API_KEY` | `/api/speak` — voice for "Hear this" / auto-speak |
 | `ELEVENLABS_VOICE_ID` | Optional — which ElevenLabs voice to use (defaults to a preset one) |
 
@@ -371,9 +425,12 @@ cloud-metadata targets) since the model picks the URL, not a person.
   Notion — all three now wired into `match_knowledge`'s union), then
   verify a real Ask query in each of Tech/Social/Support actually returns
   matches.
-- Wire Sources' remaining "Connect" buttons (Zoom, Gmail, Google Drive,
-  WhatsApp) to real OAuth flows — GitHub, Fathom, and Notion already flip
+- Wire Sources' remaining "Connect" buttons (Zoom, Google Drive, WhatsApp)
+  to real OAuth flows — GitHub, Fathom, Notion, and now Gmail already flip
   to "Connected" live once their env vars are set (see `lib/connectors.ts`).
+- Run the Gmail OAuth one-time setup (see Gmail support drafting above)
+  and confirm a real support-inbox draft round-trips correctly before
+  relying on it.
 - Build Routing's rule editor and Team's invite/permission editing.
 - Admin UI for editing `workspace_prompts` (today it's DB-only).
 - A trigger/webhook that embeds a row on insert, so new content doesn't

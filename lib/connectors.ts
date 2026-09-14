@@ -4,7 +4,7 @@ import type { SourceConnector } from "@/lib/types";
  * The connectors Sources should offer. `connected` is computed below from
  * real server-side credentials, per the brief's "only show connected once
  * a connector is genuinely wired up" — never hardcoded true. A connector
- * with no ingestion script yet (zoom/gmail/drive/whatsapp) has no entry in
+ * with no ingestion path yet (zoom/drive/whatsapp) has no entry in
  * CONNECTOR_ENV_VARS, so it's always false until one exists.
  */
 export const CONNECTORS: Omit<SourceConnector, "connected">[] = [
@@ -22,6 +22,7 @@ const CONNECTOR_ENV_VARS: Partial<Record<string, string[]>> = {
   github: ["GITHUB_APP_ID", "GITHUB_APP_PRIVATE_KEY", "GITHUB_INSTALLATION_ID"],
   fathom: ["FATHOM_API_KEY"],
   notion: ["NOTION_API_KEY"],
+  gmail: ["GMAIL_CLIENT_ID", "GMAIL_CLIENT_SECRET", "GMAIL_REFRESH_TOKEN"],
 };
 
 export function getConnectors(): SourceConnector[] {

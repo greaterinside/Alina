@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/sync-notion",
       "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/cron/gmail-draft-replies",
+      "schedule": "*/10 * * * *"
     }
   ]
 }
