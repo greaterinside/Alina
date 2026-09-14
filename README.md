@@ -198,7 +198,15 @@ name. Sharing a top-level page shares everything nested under it.
 
 Safe to re-run — incremental by Notion's own `last_edited_time`, so a
 normal re-run only re-fetches/re-embeds pages that actually changed since
-the last run.
+the last run. **After upgrading the script itself** (e.g. this database-
+row-expansion fix), unedited objects still look "up to date" against
+their old timestamp even though an older, less-capable version of the
+script ingested them — run once with `FORCE_REFRESH=1` to re-process
+everything regardless of staleness:
+
+```bash
+FORCE_REFRESH=1 node scripts/ingest-notion.mjs
+```
 
 **Databases are expanded into their actual rows, not just their title.**
 A content calendar, campaign tracker, or client list in Notion is a

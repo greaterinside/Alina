@@ -64,6 +64,13 @@ const CHUNK_CHARS = 6000;
 // bounded so one pathological page can't hang the whole run.
 const MAX_BLOCK_DEPTH = 6;
 const EMBED_BATCH_CHAR_BUDGET = 20_000;
+// Same escape hatch ingest-fathom.mjs already has — the normal staleness
+// check only catches content Notion says actually changed, which is no
+// help the first time a *script* gains new capability (e.g. this file's
+// database-row expansion): an unedited object looks "up to date" against
+// its old timestamp even though it was ingested by an older, less-capable
+// version of this script and never got the new treatment.
+const FORCE_REFRESH = process.env.FORCE_REFRESH === "1";
 
 const missing = [
   ["NEXT_PUBLIC_SUPABASE_URL", SUPABASE_URL],
@@ -349,12 +356,18 @@ async function main() {
 
   const existingUpdatedAt = await fetchExistingUpdatedAt();
 
-  const stale = allObjects.filter((obj) => {
-    const known = existingUpdatedAt.get(obj.id);
-    return !known || new Date(obj.last_edited_time) > new Date(known);
-  });
+  const stale = FORCE_REFRESH
+    ? allObjects
+    : allObjects.filter((obj) => {
+        const known = existingUpdatedAt.get(obj.id);
+        return !known || new Date(obj.last_edited_time) > new Date(known);
+      });
 
-  console.log(`${allObjects.length - stale.length} up to date, ${stale.length} new or edited since last run.\n`);
+  console.log(
+    FORCE_REFRESH
+      ? `FORCE_REFRESH=1 — re-ingesting all ${stale.length} item(s) regardless of staleness.\n`
+      : `${allObjects.length - stale.length} up to date, ${stale.length} new or edited since last run.\n`
+  );
   if (stale.length === 0) return;
 
   let grandTotal = 0;
