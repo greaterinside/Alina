@@ -426,7 +426,11 @@ const NOTION_TOOLS = [
       "List Notion database rows (campaigns, launches, content-calendar entries, anything with a date column) " +
       "whose date falls in a range — for 'what's launching this week,' 'what campaigns do we have in October,' " +
       "'what's on the content calendar this month.' Use today's date (given above) to work out the actual range " +
-      "for relative phrases like 'this week' or 'next month'. Returns title, date, and a content snippet for each " +
+      "for relative phrases like 'this week' or 'next month' — but treat 'in N days/weeks' as CUMULATIVE (today " +
+      "through N days/weeks out), not as isolating only that one distant week; 'what's coming up in the next two " +
+      "weeks' almost always means everything between now and then, not just the 7-day slice exactly two weeks " +
+      "from today with everything sooner excluded. Only 'this week'/'next week'/'this month' name one specific " +
+      "single window on their own. Returns title, date, and a content snippet for each " +
       "matching row — NOT a similarity search, so it reliably catches everything in range regardless of wording. " +
       "IMPORTANT: for ANY question shaped like this, call this tool BEFORE answering — do not answer from the " +
       "context you were already given instead. That initial context is a similarity-ranked snippet of only a " +
