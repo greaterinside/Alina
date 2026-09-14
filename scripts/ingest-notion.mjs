@@ -213,6 +213,8 @@ function propertyValueText(prop) {
       return (prop.people ?? []).map((p) => p.name ?? "someone").join(", ");
     case "files":
       return (prop.files ?? []).map((f) => f.name ?? "").filter(Boolean).join(", ");
+    case "unique_id":
+      return prop.unique_id ? `${prop.unique_id.prefix ?? ""}${prop.unique_id.number ?? ""}` : "";
     case "formula":
       return prop.formula ? String(prop.formula[prop.formula.type] ?? "") : "";
     default:
@@ -229,6 +231,24 @@ function formatProperties(properties) {
     })
     .filter(Boolean)
     .join("\n");
+}
+
+/**
+ * A row's single primary date, if it has one — for date-range questions
+ * ("what campaigns this week") that similarity search can't answer, no
+ * matter how well the text content is written (see
+ * supabase/migrations/0014_notion_docs_row_date.sql). Prefers a property
+ * whose name suggests it's the main one ("launch", "date", "start",
+ * "when", "due") over an arbitrary other date column (e.g. an "End Date"
+ * alongside it); falls back to the first date property found if none
+ * matches by name. A row can have zero date properties — that's fine,
+ * row_date just stays null and it's only reachable by search for that row.
+ */
+function primaryRowDate(properties) {
+  const dateEntries = Object.entries(properties ?? {}).filter(([, prop]) => prop.type === "date" && prop.date?.start);
+  if (dateEntries.length === 0) return null;
+  const preferred = dateEntries.find(([name]) => /launch|date|start|when|due/i.test(name));
+  return (preferred ?? dateEntries[0])[1].date.start;
 }
 
 /** Flattens one block's own text content — not its children, callers handle recursion. Also reports any inline database found, so the caller can queue its rows too. */
@@ -356,6 +376,8 @@ async function buildDoc(obj) {
 
   if (!content.trim()) return { docs: [], childDatabaseIds };
 
+  const rowDate = isRow ? primaryRowDate(obj.properties) : null;
+
   const docs = chunk(content).map((text, i, all) => ({
     page_id: obj.id,
     doc_type: isDatabase ? "database" : "page",
@@ -364,6 +386,7 @@ async function buildDoc(obj) {
     content: text,
     source_url: obj.url,
     notion_updated_at: obj.last_edited_time,
+    row_date: rowDate,
   }));
 
   return { docs, childDatabaseIds };

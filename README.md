@@ -281,6 +281,29 @@ with the next question; `/api/ask` fetches that document's full content
 directly (`getUploadContent` in `lib/documents.ts`) and prepends it to the
 context regardless of similarity score.
 
+## Date-range questions ("what campaigns this week")
+
+Similarity search can't reliably answer a date-range question, no matter
+how well the underlying content is written — a campaign's title and
+description just don't semantically resemble the word "week." Confirmed
+live: every campaign row was correctly ingested (see **Notion ingestion**
+above) with its Launch Date as readable text, and "what campaigns do we
+have this week" *still* came back empty, because the date string doesn't
+read as similar to "this week" in embedding space. Same problem Fathom
+already hit and solved with real SQL lookups instead of embeddings (see
+`supabase/migrations/0009_fathom_recent_calls.sql` and `0011`).
+
+`tech.notion_docs.row_date` (see
+`supabase/migrations/0014_notion_docs_row_date.sql`) holds each database
+row's actual date — `scripts/ingest-notion.mjs` pulls it from whichever
+date-type property the row has (preferring one named like "Launch Date"/
+"Start"/"Due" over an unrelated other date column), so
+`list_notion_items_by_date` (a tool in `lib/rag.ts`, same tool-loop
+mechanism as everything else) can filter by real date directly — no
+embeddings involved, so it reliably catches everything in range
+regardless of wording. Needs a `FORCE_REFRESH=1` ingestion run once after
+this migration to backfill `row_date` on rows ingested before it existed.
+
 ## Live web tools
 
 `lib/rag.ts` gives Claude two more tools alongside the Fathom lookups:

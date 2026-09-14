@@ -393,6 +393,62 @@ const WEB_TOOLS = [
   },
 ];
 
+/**
+ * Same reasoning as the Fathom date-range tools above (list_recent_calls,
+ * get_call_summaries_in_range): a Notion campaign/launch/content-calendar
+ * row's title and description don't semantically resemble "this week" —
+ * similarity search has no reliable way to answer a date-range question
+ * regardless of how well the row's content is written. This filters
+ * tech.notion_docs by its real row_date column instead of guessing from
+ * text. Confirmed live this was needed: "what campaigns this week" came
+ * back empty even once every campaign row was correctly ingested with
+ * its Launch Date as text — the date just doesn't read as similar to
+ * "this week" in embedding space.
+ */
+const NOTION_TOOLS = [
+  {
+    name: "list_notion_items_by_date",
+    description:
+      "List Notion database rows (campaigns, launches, content-calendar entries, anything with a date column) " +
+      "whose date falls in a range — for 'what's launching this week,' 'what campaigns do we have in October,' " +
+      "'what's on the content calendar this month.' Use today's date (given above) to work out the actual range " +
+      "for relative phrases like 'this week' or 'next month'. Returns title, date, and a content snippet for each " +
+      "matching row — NOT a similarity search, so it reliably catches everything in range regardless of wording. " +
+      "Only rows that have a date property set are ever returned; use normal context/search instead for anything " +
+      "that isn't a date-range question.",
+    input_schema: {
+      type: "object",
+      properties: {
+        since: { type: "string", description: "ISO date (YYYY-MM-DD), inclusive start of the range" },
+        until: { type: "string", description: "ISO date (YYYY-MM-DD), inclusive end of the range" },
+      },
+      required: ["since", "until"],
+    },
+  },
+];
+
+async function listNotionItemsByDate(supabase: any, since: string, until: string): Promise<string> {
+  const { data, error } = await supabase
+    .schema("tech")
+    .from("notion_docs")
+    .select("title, row_date, content, source_url")
+    .gte("row_date", since)
+    .lte("row_date", until)
+    .order("row_date", { ascending: true })
+    .limit(50);
+
+  if (error) return `Couldn't look that up — ${error.message}`;
+  if (!data || data.length === 0) return "No Notion items found with a date in that range.";
+
+  return data
+    .map((r: { title: string; row_date: string; content: string; source_url: string | null }) => {
+      const date = r.row_date.slice(0, 10);
+      const snippet = r.content.slice(0, 300);
+      return `- ${r.title} (${date})${r.source_url ? ` — ${r.source_url}` : ""}\n  ${snippet}`;
+    })
+    .join("\n\n");
+}
+
 const MAX_FETCHED_PAGE_CHARS = 6000;
 
 /**
@@ -479,6 +535,9 @@ async function fetchPage(url: string): Promise<string> {
 async function runTool(supabase: any, name: string, input: Record<string, unknown>): Promise<string> {
   if (name === "search_web") return searchWeb(String(input.query ?? ""));
   if (name === "fetch_page") return fetchPage(String(input.url ?? ""));
+  if (name === "list_notion_items_by_date") {
+    return listNotionItemsByDate(supabase, String(input.since ?? ""), String(input.until ?? ""));
+  }
   if (name === "list_calls_by_participant") {
     const rows = await listFathomCallsByParticipant(supabase, String(input.name ?? ""));
     if (rows.length === 0) return "No calls found matching that name.";
@@ -568,7 +627,7 @@ async function callAnthropicWithTools(opts: {
         max_tokens: opts.maxTokens,
         system: extraSystem ? `${opts.system}\n\n${extraSystem}` : opts.system,
         messages,
-        ...(withTools && opts.supabase ? { tools: [...FATHOM_TOOLS, ...WEB_TOOLS] } : {}),
+        ...(withTools && opts.supabase ? { tools: [...FATHOM_TOOLS, ...WEB_TOOLS, ...NOTION_TOOLS] } : {}),
       }),
     });
     if (!res.ok) throw new Error(`Answer generation failed: ${res.status}`);
