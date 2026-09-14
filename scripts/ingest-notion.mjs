@@ -20,6 +20,18 @@
  * explicitly shared with it (Share -> search the integration's name ->
  * Invite). Sharing a top-level page shares everything nested under it.
  *
+ * KNOWN NOTION QUIRK — a database whose parent is the workspace itself
+ * (top-level, not nested under any page) can be fully accessible to the
+ * integration (a direct GET by id works, real data comes back) while
+ * never appearing in /v1/search results at all. Confirmed live: a real
+ * campaign-tracker database the integration could fetch directly by id
+ * simply never showed up among the ~262 search results. Search is
+ * Notion's only discovery mechanism — there's no "list everything this
+ * integration can see" endpoint — so NOTION_EXTRA_IDS (comma-separated
+ * page/database ids) is the escape hatch: every id listed there is
+ * fetched directly and ingested regardless of whether search ever
+ * surfaces it.
+ *
  * IMPORTANT — a database's rows are its actual content, not its title.
  * A content calendar / campaign tracker / client list is a database: its
  * title alone ("Campaigns & Launches") says almost nothing — the real
@@ -114,6 +126,38 @@ async function searchAll() {
     cursor = data.has_more ? data.next_cursor : undefined;
   } while (cursor);
   return results;
+}
+
+/**
+ * Fetches NOTION_EXTRA_IDS (comma-separated page/database ids, dashes
+ * optional) directly by id — the escape hatch for content that's fully
+ * accessible to the integration but never shows up in /v1/search (see the
+ * file header comment). Tries database first since that's the more common
+ * case for something search misses (a workspace-parented database), then
+ * falls back to page. Silently normalizes ids like Notion URLs give them
+ * (32 hex chars, no dashes) into the dashed form the API expects.
+ */
+async function fetchExtraObjects() {
+  const raw = (process.env.NOTION_EXTRA_IDS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  const objects = [];
+  for (const rawId of raw) {
+    const id =
+      rawId.length === 32 && !rawId.includes("-")
+        ? `${rawId.slice(0, 8)}-${rawId.slice(8, 12)}-${rawId.slice(12, 16)}-${rawId.slice(16, 20)}-${rawId.slice(20)}`
+        : rawId;
+    try {
+      objects.push(await notion(`/v1/databases/${id}`));
+      continue;
+    } catch {
+      // not a database — fall through and try as a page
+    }
+    try {
+      objects.push(await notion(`/v1/pages/${id}`));
+    } catch (err) {
+      console.error(`NOTION_EXTRA_IDS: couldn't fetch ${id} as a database or page — ${err.message}`);
+    }
+  }
+  return objects;
 }
 
 /** Every row (a "page" object) inside one database, paginated. */
@@ -330,18 +374,25 @@ async function main() {
   const searchResults = await searchAll();
   console.log(`Found ${searchResults.length} page(s)/database(s) shared with the integration.\n`);
 
-  if (searchResults.length === 0) {
+  const extraObjects = await fetchExtraObjects();
+  if (extraObjects.length > 0) {
+    console.log(`Also fetched ${extraObjects.length} item(s) from NOTION_EXTRA_IDS directly (search doesn't list these).\n`);
+  }
+
+  const seedObjects = [...searchResults, ...extraObjects];
+  if (seedObjects.length === 0) {
     console.log("Nothing shared yet — in Notion, open a page and use Share -> invite the integration by name.");
     return;
   }
 
-  // Expands every database (shared directly, or found embedded inside a
-  // shared page) into its actual rows — a database's title alone says
-  // almost nothing; each row's properties are where the real content is.
+  // Expands every database (shared directly, found embedded inside a
+  // shared page, or listed in NOTION_EXTRA_IDS) into its actual rows — a
+  // database's title alone says almost nothing; each row's properties are
+  // where the real content is.
   console.log("Expanding databases into rows...\n");
   const allObjects = [];
   const seenIds = new Set();
-  const expandQueue = [...searchResults];
+  const expandQueue = [...seedObjects];
   while (expandQueue.length > 0) {
     const obj = expandQueue.shift();
     if (seenIds.has(obj.id)) continue;
@@ -352,7 +403,7 @@ async function main() {
       expandQueue.push(...rows);
     }
   }
-  console.log(`${allObjects.length} item(s) total once expanded (was ${searchResults.length}).\n`);
+  console.log(`${allObjects.length} item(s) total once expanded (was ${seedObjects.length}).\n`);
 
   const existingUpdatedAt = await fetchExistingUpdatedAt();
 

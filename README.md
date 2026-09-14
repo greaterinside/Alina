@@ -227,6 +227,29 @@ Wired into `match_knowledge`'s union, same as GitHub and Fathom above.
 Once `NOTION_API_KEY` is set, the Notion card on **Sources** flips to
 "Connected" on its own (see `lib/connectors.ts`) — no separate toggle.
 
+**A database that's genuinely shared can still be invisible to search.**
+Confirmed live: a campaign-tracker database the integration could fetch
+directly by id (full schema, real data) never once appeared among ~262
+`/v1/search` results — its `parent` is `{"type":"workspace"}` (top-level,
+not nested under any page), and Notion's search apparently doesn't
+reliably surface those for integrations even with real access. Search is
+the only discovery mechanism Notion's API offers — there's no "list
+everything this integration can see" endpoint — so the workaround is
+`NOTION_EXTRA_IDS`: a comma-separated list of page/database ids (as they
+appear in a Notion URL) that get fetched directly every run, regardless
+of whether search ever lists them. Diagnose a suspected case of this
+yourself before assuming a sharing problem — pull the id out of the
+Notion URL (32 hex chars right after `/p/`, dashes optional) and:
+
+```bash
+curl -s -H "Authorization: Bearer $NOTION_API_KEY" -H "Notion-Version: 2022-06-28" \
+  "https://api.notion.com/v1/databases/<id-with-dashes>"
+```
+
+Real data back means it's this search quirk (add it to `NOTION_EXTRA_IDS`);
+a 404/"could not find" means it's a genuine sharing gap instead (Share it
+with the integration in Notion).
+
 ## Document upload
 
 The paperclip button in the Ask composer (`components/ask/Composer.tsx`)
@@ -286,6 +309,7 @@ cloud-metadata targets) since the model picks the URL, not a person.
 | `GITHUB_APP_ID` / `GITHUB_APP_PRIVATE_KEY` / `GITHUB_INSTALLATION_ID` | `scripts/ingest-github.mjs`'s GitHub App auth |
 | `FATHOM_API_KEY` | `scripts/ingest-fathom.mjs`'s Fathom API auth |
 | `NOTION_API_KEY` | `scripts/ingest-notion.mjs`'s Notion internal integration token |
+| `NOTION_EXTRA_IDS` | Optional — comma-separated page/database ids search doesn't surface (see Notion ingestion above) |
 | `TAVILY_API_KEY` | `search_web` tool in `lib/rag.ts` — live web search during Ask answers |
 | `ELEVENLABS_API_KEY` | `/api/speak` — voice for "Hear this" / auto-speak |
 | `ELEVENLABS_VOICE_ID` | Optional — which ElevenLabs voice to use (defaults to a preset one) |
