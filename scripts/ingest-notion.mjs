@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 /**
- * Pulls every page (and database container) shared with the Alina Notion
- * integration, flattens each page's blocks to plain text, embeds them with
- * OpenAI, and upserts them into tech.notion_docs so match_knowledge can
- * search them from the Tech workspace once its union branch is updated
- * (see README's Notion ingestion section). Needs
+ * Pulls every page and database shared with the Alina Notion integration
+ * — INCLUDING every row inside a shared database, and every database
+ * embedded inline inside a shared page — flattens each to plain text,
+ * embeds with OpenAI, and upserts into tech.notion_docs so
+ * match_knowledge can search them from the Tech workspace once its union
+ * branch is updated (see README's Notion ingestion section). Needs
  * supabase/migrations/0012_notion_docs.sql applied first.
  *
  * Run:
@@ -19,9 +20,21 @@
  * explicitly shared with it (Share -> search the integration's name ->
  * Invite). Sharing a top-level page shares everything nested under it.
  *
- * Incremental: re-run any time. A page is only re-fetched/re-embedded when
- * Notion's last_edited_time is newer than what's already stored, so a
- * normal re-run costs almost nothing once everything is caught up.
+ * IMPORTANT — a database's rows are its actual content, not its title.
+ * A content calendar / campaign tracker / client list is a database: its
+ * title alone ("Campaigns & Launches") says almost nothing — the real
+ * content (dates, statuses, owners) lives in each ROW's properties. This
+ * script queries every shared database's rows AND every database found
+ * embedded inline inside a shared page (a child_database block), and
+ * ingests each row as its own doc, its column values turned into
+ * "Property: value" lines so a question like "what campaigns this week"
+ * can actually match against a row's real Date/Status columns.
+ *
+ * Incremental: re-run any time. A page/row is only re-fetched/re-embedded
+ * when Notion's last_edited_time is newer than what's already stored, so
+ * a normal re-run costs almost nothing once everything is caught up —
+ * except the very first run after this fix, which will find every
+ * database row "new" (never ingested before) and pull all of them.
  *
  * Uses text-embedding-3-small at 1024 dimensions, same as the rest of this
  * schema — see supabase/migrations/0012_notion_docs.sql.
@@ -96,6 +109,18 @@ async function searchAll() {
   return results;
 }
 
+/** Every row (a "page" object) inside one database, paginated. */
+async function queryDatabaseRows(databaseId) {
+  const rows = [];
+  let cursor;
+  do {
+    const data = await notion(`/v1/databases/${databaseId}/query`, { start_cursor: cursor, page_size: 100 });
+    rows.push(...data.results);
+    cursor = data.has_more ? data.next_cursor : undefined;
+  } while (cursor);
+  return rows;
+}
+
 function plainTextFrom(richTextArray) {
   return (richTextArray ?? []).map((t) => t.plain_text ?? "").join("");
 }
@@ -107,17 +132,66 @@ function titleOf(obj) {
   return plainTextFrom(titleProp?.title) || "Untitled page";
 }
 
-/** Flattens one block's own text content — not its children, callers handle recursion. */
+/** One property value as plain text — covers the column types an actual tracker/calendar database uses. */
+function propertyValueText(prop) {
+  switch (prop.type) {
+    case "title":
+      return plainTextFrom(prop.title);
+    case "rich_text":
+      return plainTextFrom(prop.rich_text);
+    case "select":
+      return prop.select?.name ?? "";
+    case "status":
+      return prop.status?.name ?? "";
+    case "multi_select":
+      return (prop.multi_select ?? []).map((o) => o.name).join(", ");
+    case "date":
+      if (!prop.date) return "";
+      return prop.date.end ? `${prop.date.start} → ${prop.date.end}` : prop.date.start;
+    case "number":
+      return prop.number != null ? String(prop.number) : "";
+    case "checkbox":
+      return prop.checkbox ? "yes" : "no";
+    case "url":
+      return prop.url ?? "";
+    case "email":
+      return prop.email ?? "";
+    case "phone_number":
+      return prop.phone_number ?? "";
+    case "people":
+      return (prop.people ?? []).map((p) => p.name ?? "someone").join(", ");
+    case "files":
+      return (prop.files ?? []).map((f) => f.name ?? "").filter(Boolean).join(", ");
+    case "formula":
+      return prop.formula ? String(prop.formula[prop.formula.type] ?? "") : "";
+    default:
+      return ""; // relation/rollup/created_by/etc. — not worth another API round trip per row
+  }
+}
+
+/** A database row's columns as "Name: value" lines — this is usually where a row's actual content lives, not its body blocks. */
+function formatProperties(properties) {
+  return Object.entries(properties ?? {})
+    .map(([name, prop]) => {
+      const value = propertyValueText(prop);
+      return value ? `${name}: ${value}` : null;
+    })
+    .filter(Boolean)
+    .join("\n");
+}
+
+/** Flattens one block's own text content — not its children, callers handle recursion. Also reports any inline database found, so the caller can queue its rows too. */
 function textOfBlock(block) {
+  if (block.type === "child_database") return { text: "", childDatabaseId: block.id };
   const data = block[block.type];
-  if (!data) return "";
+  if (!data) return { text: "" };
   if (Array.isArray(data.rich_text)) {
     const text = plainTextFrom(data.rich_text);
-    if (block.type === "to_do") return `[${data.checked ? "x" : " "}] ${text}`;
-    if (block.type === "code") return `\`\`\`\n${text}\n\`\`\``;
-    return text;
+    if (block.type === "to_do") return { text: `[${data.checked ? "x" : " "}] ${text}` };
+    if (block.type === "code") return { text: `\`\`\`\n${text}\n\`\`\`` };
+    return { text };
   }
-  return "";
+  return { text: "" };
 }
 
 async function fetchBlockChildren(blockId) {
@@ -131,19 +205,23 @@ async function fetchBlockChildren(blockId) {
   return blocks;
 }
 
+/** Returns { text, childDatabaseIds } — childDatabaseIds are inline databases found while walking this page's blocks, for the caller to expand into rows too. */
 async function flattenBlocks(blockId, depth = 0) {
-  if (depth > MAX_BLOCK_DEPTH) return "";
+  if (depth > MAX_BLOCK_DEPTH) return { text: "", childDatabaseIds: [] };
   const blocks = await fetchBlockChildren(blockId);
   const lines = [];
+  const childDatabaseIds = [];
   for (const block of blocks) {
-    const text = textOfBlock(block);
+    const { text, childDatabaseId } = textOfBlock(block);
     if (text) lines.push(text);
-    if (block.has_children) {
+    if (childDatabaseId) childDatabaseIds.push(childDatabaseId);
+    if (block.has_children && block.type !== "child_database") {
       const nested = await flattenBlocks(block.id, depth + 1);
-      if (nested) lines.push(nested);
+      if (nested.text) lines.push(nested.text);
+      childDatabaseIds.push(...nested.childDatabaseIds);
     }
   }
-  return lines.join("\n");
+  return { text: lines.join("\n"), childDatabaseIds };
 }
 
 function chunk(content) {
@@ -164,7 +242,7 @@ async function embedBatch(texts) {
   return data.data.map((d) => d.embedding);
 }
 
-/** page_id -> newest notion_updated_at already stored, so unchanged pages can be skipped without re-fetching their blocks. */
+/** page_id -> newest notion_updated_at already stored, so unchanged pages/rows can be skipped without re-fetching. */
 async function fetchExistingUpdatedAt() {
   const map = new Map();
   const pageSize = 1000;
@@ -203,16 +281,31 @@ function batchDocs(docs) {
   return batches;
 }
 
+/**
+ * Builds the doc(s) for one page/database/row AND returns any inline
+ * database ids discovered inside it, so the caller can queue those too —
+ * this is how a database embedded inside a shared page (never separately
+ * "shared" itself) still gets its rows ingested.
+ */
 async function buildDoc(obj) {
   const title = titleOf(obj);
   const isDatabase = obj.object === "database";
-  const content = isDatabase
-    ? [title, plainTextFrom(obj.description)].filter(Boolean).join("\n\n")
-    : [title, await flattenBlocks(obj.id)].filter(Boolean).join("\n\n");
+  const isRow = obj.object === "page" && obj.parent?.type === "database_id";
 
-  if (!content.trim()) return [];
+  let content;
+  let childDatabaseIds = [];
+  if (isDatabase) {
+    content = [title, plainTextFrom(obj.description)].filter(Boolean).join("\n\n");
+  } else {
+    const propsText = isRow ? formatProperties(obj.properties) : "";
+    const flattened = await flattenBlocks(obj.id);
+    childDatabaseIds = flattened.childDatabaseIds;
+    content = [title, propsText, flattened.text].filter(Boolean).join("\n\n");
+  }
 
-  return chunk(content).map((text, i, all) => ({
+  if (!content.trim()) return { docs: [], childDatabaseIds };
+
+  const docs = chunk(content).map((text, i, all) => ({
     page_id: obj.id,
     doc_type: isDatabase ? "database" : "page",
     path: all.length > 1 ? `${obj.id}#chunk${i}` : obj.id,
@@ -221,39 +314,81 @@ async function buildDoc(obj) {
     source_url: obj.url,
     notion_updated_at: obj.last_edited_time,
   }));
+
+  return { docs, childDatabaseIds };
 }
 
 async function main() {
   console.log("Searching everything shared with the Alina integration...\n");
-  const objects = await searchAll();
-  console.log(`Found ${objects.length} page(s)/database(s) shared with the integration.\n`);
+  const searchResults = await searchAll();
+  console.log(`Found ${searchResults.length} page(s)/database(s) shared with the integration.\n`);
 
-  if (objects.length === 0) {
+  if (searchResults.length === 0) {
     console.log("Nothing shared yet — in Notion, open a page and use Share -> invite the integration by name.");
     return;
   }
 
+  // Expands every database (shared directly, or found embedded inside a
+  // shared page) into its actual rows — a database's title alone says
+  // almost nothing; each row's properties are where the real content is.
+  console.log("Expanding databases into rows...\n");
+  const allObjects = [];
+  const seenIds = new Set();
+  const expandQueue = [...searchResults];
+  while (expandQueue.length > 0) {
+    const obj = expandQueue.shift();
+    if (seenIds.has(obj.id)) continue;
+    seenIds.add(obj.id);
+    allObjects.push(obj);
+    if (obj.object === "database") {
+      const rows = await queryDatabaseRows(obj.id);
+      expandQueue.push(...rows);
+    }
+  }
+  console.log(`${allObjects.length} item(s) total once expanded (was ${searchResults.length}).\n`);
+
   const existingUpdatedAt = await fetchExistingUpdatedAt();
 
-  const stale = objects.filter((obj) => {
+  const stale = allObjects.filter((obj) => {
     const known = existingUpdatedAt.get(obj.id);
     return !known || new Date(obj.last_edited_time) > new Date(known);
   });
 
-  console.log(`${objects.length - stale.length} up to date, ${stale.length} new or edited since last run.\n`);
+  console.log(`${allObjects.length - stale.length} up to date, ${stale.length} new or edited since last run.\n`);
   if (stale.length === 0) return;
 
   let grandTotal = 0;
   for (const obj of stale) {
     const title = titleOf(obj);
     process.stdout.write(`${title}... `);
-    let docs;
+    let docs, childDatabaseIds;
     try {
-      docs = await buildDoc(obj);
+      ({ docs, childDatabaseIds } = await buildDoc(obj));
     } catch (err) {
       console.log(`fetch failed — ${err.message}`);
       continue;
     }
+
+    // An inline database found just now (inside a page that was already
+    // being processed) — queue its rows for this same run too, rather
+    // than needing a second run to pick them up.
+    for (const dbId of childDatabaseIds) {
+      if (seenIds.has(dbId)) continue;
+      seenIds.add(dbId);
+      try {
+        const db = await notion(`/v1/databases/${dbId}`);
+        const rows = await queryDatabaseRows(dbId);
+        for (const row of [db, ...rows]) {
+          if (!seenIds.has(row.id)) {
+            seenIds.add(row.id);
+            stale.push(row);
+          }
+        }
+      } catch (err) {
+        console.log(`(inline database ${dbId} fetch failed — ${err.message}) `);
+      }
+    }
+
     if (docs.length === 0) {
       console.log("empty, skipped");
       continue;
@@ -283,7 +418,7 @@ async function main() {
     await new Promise((r) => setTimeout(r, 350)); // be polite to Notion's ~3req/s average rate limit
   }
 
-  console.log(`\nFinished. ${grandTotal} chunk(s) ingested/updated across ${stale.length} page(s)/database(s).`);
+  console.log(`\nFinished. ${grandTotal} chunk(s) ingested/updated across ${stale.length} item(s).`);
 }
 
 main().catch((err) => {

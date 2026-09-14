@@ -200,6 +200,20 @@ Safe to re-run — incremental by Notion's own `last_edited_time`, so a
 normal re-run only re-fetches/re-embeds pages that actually changed since
 the last run.
 
+**Databases are expanded into their actual rows, not just their title.**
+A content calendar, campaign tracker, or client list in Notion is a
+database — its title alone ("Campaigns & Launches") says almost nothing;
+the real content (dates, statuses, owners) lives in each row's columns.
+Every shared database's rows get queried and ingested individually, each
+row's properties turned into "Column: value" lines, and the same applies
+to a database found embedded *inside* a shared page (a `child_database`
+block) even if that database was never separately shared. Earlier builds
+of this script only stored a database's own title/description — fixed
+after that surfaced as a real gap live (asked "what campaigns this week,"
+got nothing, even though the calendar was right there in Notion). The
+first run after this fix will find every row "new" and ingest all of
+them; normal incremental re-runs after that are cheap again.
+
 Wired into `match_knowledge`'s union, same as GitHub and Fathom above.
 
 Once `NOTION_API_KEY` is set, the Notion card on **Sources** flips to
