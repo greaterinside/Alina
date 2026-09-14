@@ -673,11 +673,15 @@ async function callAnthropicWithTools(opts: {
 
     messages.push({ role: "assistant", content: data.content });
     const toolResults = await Promise.all(
-      toolUseBlocks.map(async (block: { id: string; name: string; input: Record<string, unknown> }) => ({
-        type: "tool_result",
-        tool_use_id: block.id,
-        content: await runTool(opts.supabase, block.name, block.input),
-      }))
+      toolUseBlocks.map(async (block: { id: string; name: string; input: Record<string, unknown> }) => {
+        const result = await runTool(opts.supabase, block.name, block.input);
+        // Visible in Vercel's function logs — the only way to confirm from
+        // outside whether a tool actually fired for a given question,
+        // versus the model just answering from initial context and
+        // describing it as if it had checked something live.
+        console.log(`[tool] ${block.name}(${JSON.stringify(block.input)}) -> ${result.slice(0, 200)}`);
+        return { type: "tool_result", tool_use_id: block.id, content: result };
+      })
     );
     messages.push({ role: "user", content: toolResults });
   }
