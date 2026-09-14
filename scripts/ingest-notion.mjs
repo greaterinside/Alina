@@ -389,7 +389,7 @@ async function buildDoc(obj) {
     row_date: rowDate,
   }));
 
-  return { docs, childDatabaseIds };
+  return { docs, childDatabaseIds, debug: { isRow, rowDate, parentType: obj.parent?.type, hasProperties: !!obj.properties } };
 }
 
 async function main() {
@@ -448,12 +448,15 @@ async function main() {
   for (const obj of stale) {
     const title = titleOf(obj);
     process.stdout.write(`${title}... `);
-    let docs, childDatabaseIds;
+    let docs, childDatabaseIds, debug;
     try {
-      ({ docs, childDatabaseIds } = await buildDoc(obj));
+      ({ docs, childDatabaseIds, debug } = await buildDoc(obj));
     } catch (err) {
       console.log(`fetch failed — ${err.message}`);
       continue;
+    }
+    if (process.env.NOTION_DEBUG === "1" && debug?.isRow) {
+      console.log(`\n  [debug] isRow=${debug.isRow} parentType=${debug.parentType} hasProperties=${debug.hasProperties} rowDate=${debug.rowDate}`);
     }
 
     // An inline database found just now (inside a page that was already
