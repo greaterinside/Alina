@@ -3,10 +3,18 @@
  *
  * These mirror the data model described by the founder: a shared "master"
  * knowledge base (per workspace, in Supabase) plus a role that gates the
- * admin/senior screens, plus a thin personalization layer per team member.
+ * admin screens, plus a thin personalization layer per team member.
  */
 
-export type Role = "admin" | "senior" | "member";
+/**
+ * Matches public.roles' real check constraint, discovered live (see
+ * supabase/migrations/0001_roles_and_prompts.sql's note) — NOT the
+ * generic admin/senior/member hierarchy this rebuild originally assumed
+ * before checking. "admin" has full control; "ai engineer" is the
+ * technical/builder role (sees admin screens, same as old "senior");
+ * "content" is a regular team member (Ask only, same as old "member").
+ */
+export type Role = "admin" | "ai engineer" | "content";
 
 /** The four knowledge workspaces. Assistant is the cross-cutting one. */
 export type WorkspaceId = "assistant" | "tech" | "social" | "support";
@@ -48,12 +56,12 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceMeta> = {
 
 export const WORKSPACE_ORDER: WorkspaceId[] = ["assistant", "tech", "social", "support"];
 
-/** Sections gated to admin/senior roles. Ask is deliberately not in this list. */
+/** Sections gated to admin/ai-engineer roles. Ask is deliberately not in this list. */
 export const ADMIN_SECTIONS = ["sources", "routing", "team"] as const;
 export type AdminSection = (typeof ADMIN_SECTIONS)[number];
 
 export function canSeeAdminSections(role: Role): boolean {
-  return role === "admin" || role === "senior";
+  return role === "admin" || role === "ai engineer";
 }
 
 export interface TeamMember {

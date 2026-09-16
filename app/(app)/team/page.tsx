@@ -51,8 +51,8 @@ export default async function TeamPage() {
             />
             {identity.role !== "admin" && (
               <p className="mt-3 text-[12px] text-charcoal/50">
-                Only admins can change who has access to which workspace — you can view this as a
-                senior teammate.
+                Only admins can change who has access to which workspace — you can view this as
+                an ai-engineer teammate.
               </p>
             )}
           </>

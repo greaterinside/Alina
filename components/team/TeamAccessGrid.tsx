@@ -12,7 +12,7 @@ interface Member {
   workspaces: WorkspaceId[];
 }
 
-const ROLES: Role[] = ["admin", "senior", "member"];
+const ROLES: Role[] = ["admin", "ai engineer", "content"];
 
 /**
  * Click a pill to grant/revoke that person's access to a workspace. Updates
@@ -305,7 +305,7 @@ function InviteForm({ onInvited }: { onInvited: (member: Member) => void }) {
         </button>
       </form>
       <p className="mt-2 text-[11.5px] text-charcoal/45">
-        Starts with access to just Assistant, and role "member" — grant more below once they're added.
+        Starts with access to just Assistant, and role "content" — grant more below once they're added.
       </p>
 
       {error && (

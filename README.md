@@ -19,7 +19,7 @@ Built so far:
 
 - **Role-gated sidebar shell** — Ask is always visible; Sources, Routing,
   and Team are hidden in the nav (and redirect away) for anyone whose role
-  isn't `admin`/`senior` in `public.roles`.
+  isn't `admin`/`ai engineer` in `public.roles`.
 - **Ask** (the priority screen) — chat mode and typing mode, workspace tabs
   (Assistant/Tech/Social/Support, scoped to what the signed-in person can
   query), the Alina mascot with idle/thinking/speaking/happy states, free
@@ -70,25 +70,42 @@ Once Supabase env vars are set, every page except `/login` requires a real
 session (`middleware.ts`) — the demo-admin fallback above only applies when
 Supabase isn't configured at all.
 
-There's no self-serve sign-up. To give someone access:
+There's no self-serve sign-up. Once at least one `admin` row exists (see
+the bootstrap step below), everything else happens from the **Team**
+page (`app/(app)/team/page.tsx`, `components/team/TeamAccessGrid.tsx`) —
+no direct Supabase access needed day to day:
 
+- **Invite** — name + email, creates their login directly with a
+  generated temp password shown once for you to relay to them (password-
+  based, same as every other account; there's no invite-email/accept-
+  invite flow built). Starts them at role `content`, workspace
+  `assistant` only.
+- **Role** — a dropdown per person: `admin` (full control), `ai engineer`
+  (sees Sources/Routing/Team, same gate as admin), or `content` (Ask
+  only). These three are `public.roles`' real, pre-existing check
+  constraint — not a generic hierarchy this app invented.
+- **Workspaces** — click a person's workspace pill to grant/revoke
+  `assistant`/`tech`/`social`/`support` access.
+- **Remove** — deletes their login entirely (not just their role row),
+  so it's a real "no access," and frees the email for a future re-invite.
+
+An admin can't change their own role or remove themselves (blocked
+server-side, not just hidden in the UI) — there's always someone who can
+undo a mistake.
+
+**Bootstrapping the very first admin** still needs direct Supabase
+access, since inviting requires already being an admin:
 1. **Supabase Dashboard → Authentication → Users → Add user** — set their
-   email and a password (or send an invite email, if that's turned on for
-   the project). Copy the generated **User UID**.
-2. Add or update their row in `public.roles` with that same UID as
-   `user_id`, plus their `name`, `role` (`admin` / `senior` / `member`),
-   and `workspaces` (which of `assistant`/`tech`/`social`/`support` they
-   can query):
+   email and a password. Copy the generated **User UID**.
+2. Add their row in `public.roles`:
    ```sql
    insert into public.roles (user_id, name, role, workspaces)
-   values ('<the UID from step 1>', 'Diksha', 'member', array['assistant', 'tech'])
+   values ('<the UID from step 1>', 'Ajit', 'admin', array['assistant', 'tech', 'social', 'support'])
    on conflict (user_id) do update
      set name = excluded.name, role = excluded.role, workspaces = excluded.workspaces;
    ```
-3. They sign in at `/login` with that email/password. Admins can then grant
-   or revoke individual workspace access for anyone from the **Team** page
-   (click a person's workspace pill) — no more SQL needed after the first
-   row exists.
+3. They sign in at `/login` with that email/password, and can invite
+   everyone else from the Team page from then on.
 
 Signing out is the icon next to your name at the bottom of the sidebar.
 

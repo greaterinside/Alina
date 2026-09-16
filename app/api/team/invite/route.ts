@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
   const { error: roleError } = await supabase.from("roles").insert({
     user_id: created.user.id,
     name: name.trim(),
-    role: role ?? "member",
+    role: role ?? "content",
     workspaces: ["assistant"],
   });
   if (roleError) {
@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({
-    member: { user_id: created.user.id, name: name.trim(), role: role ?? "member", workspaces: ["assistant"] },
+    member: { user_id: created.user.id, name: name.trim(), role: role ?? "content", workspaces: ["assistant"] },
     tempPassword,
   });
 }

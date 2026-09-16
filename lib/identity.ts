@@ -44,7 +44,7 @@ export async function getCurrentIdentity(): Promise<Identity> {
       userId: null,
       name: "Guest",
       email: "",
-      role: "member",
+      role: "content",
       workspaces: ["assistant"],
       isDemo: false,
     };
@@ -62,7 +62,7 @@ export async function getCurrentIdentity(): Promise<Identity> {
       userId: user.id,
       name: user.email ?? "Team member",
       email: user.email ?? "",
-      role: "member",
+      role: "content",
       workspaces: ["assistant"],
       isDemo: false,
     };
@@ -72,7 +72,7 @@ export async function getCurrentIdentity(): Promise<Identity> {
     userId: user.id,
     name: data.name ?? user.email ?? "Team member",
     email: user.email ?? "",
-    role: (data.role as Role) ?? "member",
+    role: (data.role as Role) ?? "content",
     workspaces: (data.workspaces as WorkspaceId[]) ?? ["assistant"],
     isDemo: false,
   };

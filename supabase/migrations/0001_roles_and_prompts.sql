@@ -1,10 +1,15 @@
 -- Alina — roles, workspace tone/prompt control, and per-user personalization.
 --
 -- This repo was empty when the frontend rebuild started (no existing
--- Supabase migrations were found), so this file is a proposed schema for
--- the pieces the new frontend depends on. If a `roles` table already
--- exists in the live project under a different shape, adjust
--- lib/identity.ts to match instead of running this migration as-is.
+-- Supabase migrations were found in this repo), but public.roles itself
+-- turned out to already exist live with a real, different role taxonomy
+-- than first assumed here — discovered only once a real insert hit its
+-- check constraint (`select pg_get_constraintdef(oid) from pg_constraint
+-- where conname = 'roles_role_check'` showed 'admin' / 'ai engineer' /
+-- 'content', not the generic admin/senior/member this file originally
+-- had). This file is corrected to match that reality; lib/types.ts's
+-- Role type and every place gating on it (lib/identity.ts,
+-- lib/admin-gate.tsx, app/api/team/*) match these three values now.
 --
 -- Assumes the tech / social / support schemas and match_knowledge already
 -- exist per the founder's brief; this file only adds what's missing.
@@ -12,7 +17,7 @@
 create table if not exists public.roles (
   user_id uuid primary key references auth.users (id) on delete cascade,
   name text not null,
-  role text not null check (role in ('admin', 'senior', 'member')),
+  role text not null check (role in ('admin', 'ai engineer', 'content')),
   -- Which of assistant/tech/social/support this person can query.
   workspaces text[] not null default '{assistant}',
   created_at timestamptz not null default now()
@@ -36,7 +41,7 @@ create policy "admins read every role"
 -- Voice note: "each of these devices also has its own tone ... tech will
 -- have its own tone, support will have its own tone, content will have
 -- its own tone." One master tone/prompt per workspace, editable by
--- admin/senior from the (future) Routing or Sources screen.
+-- admin/ai-engineer from the (future) Routing or Sources screen.
 create table if not exists public.workspace_prompts (
   workspace text primary key check (workspace in ('assistant', 'tech', 'social', 'support')),
   label text not null,
@@ -56,7 +61,7 @@ create policy "admins manage workspace tone"
   using (
     exists (
       select 1 from public.roles r
-      where r.user_id = auth.uid() and r.role in ('admin', 'senior')
+      where r.user_id = auth.uid() and r.role in ('admin', 'ai engineer')
     )
   );
 

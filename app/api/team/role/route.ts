@@ -3,7 +3,7 @@ import { getCurrentIdentity } from "@/lib/identity";
 import { getSupabaseServiceClient } from "@/lib/supabase/server";
 import { type Role } from "@/lib/types";
 
-const VALID_ROLES: Role[] = ["admin", "senior", "member"];
+const VALID_ROLES: Role[] = ["admin", "ai engineer", "content"];
 
 export async function POST(req: NextRequest) {
   const identity = await getCurrentIdentity();
