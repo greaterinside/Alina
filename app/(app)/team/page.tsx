@@ -44,7 +44,11 @@ export default async function TeamPage() {
           />
         ) : (
           <>
-            <TeamAccessGrid initialMembers={members} canEdit={identity.role === "admin"} />
+            <TeamAccessGrid
+              initialMembers={members}
+              canEdit={identity.role === "admin"}
+              currentUserId={identity.userId}
+            />
             {identity.role !== "admin" && (
               <p className="mt-3 text-[12px] text-charcoal/50">
                 Only admins can change who has access to which workspace — you can view this as a
