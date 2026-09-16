@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
   }
 
   const identity = await getCurrentIdentity();
-  if (!identity.workspaces.includes(workspace) && identity.role !== "admin") {
+  if (!identity.workspaces.includes(workspace)) {
     return NextResponse.json({ error: "You don't have access to that workspace" }, { status: 403 });
   }
 

@@ -68,12 +68,20 @@ export async function getCurrentIdentity(): Promise<Identity> {
     };
   }
 
+  const role: Role = (data.role as Role) ?? "content";
+
   return {
     userId: user.id,
     name: data.name ?? user.email ?? "Team member",
     email: user.email ?? "",
-    role: (data.role as Role) ?? "content",
-    workspaces: (data.workspaces as WorkspaceId[]) ?? ["assistant"],
+    role,
+    // Admin means full control — it shouldn't also require separately
+    // ticking every workspace pill to match, or every consumer of
+    // .workspaces re-deriving "well, unless they're admin" on its own
+    // (api/upload/route.ts did exactly that before this existed as a
+    // single source of truth). The stored array still matters for
+    // ai-engineer/content, whose access is genuinely scoped.
+    workspaces: role === "admin" ? WORKSPACE_ORDER : (data.workspaces as WorkspaceId[]) ?? ["assistant"],
     isDemo: false,
   };
 }

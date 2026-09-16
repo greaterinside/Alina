@@ -99,9 +99,11 @@ export function TeamAccessGrid({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId, role }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? `Request failed: ${res.status}`);
-      setMembers((prev) => prev.map((m) => (m.user_id === userId ? { ...m, role } : m)));
+      const data: { role: Role; workspaces?: WorkspaceId[] } = await res.json();
+      if (!res.ok) throw new Error((data as unknown as { error?: string }).error ?? `Request failed: ${res.status}`);
+      setMembers((prev) =>
+        prev.map((m) => (m.user_id === userId ? { ...m, role: data.role, workspaces: data.workspaces ?? m.workspaces } : m))
+      );
     } catch (err) {
       setRowError((prev) => ({
         ...prev,
@@ -182,37 +184,43 @@ export function TeamAccessGrid({
                   </p>
                 )}
                 <div className="flex flex-wrap gap-1.5">
-                  {WORKSPACE_ORDER.map((id) => {
-                    const granted = Boolean(m.workspaces?.includes(id));
-                    const key = `${m.user_id}:${id}`;
-                    const isPending = pending === key;
-                    return (
-                      <button
-                        key={id}
-                        type="button"
-                        disabled={!canEdit || isPending}
-                        onClick={() => toggle(m.user_id, id, granted)}
-                        title={
-                          !canEdit
-                            ? granted
-                              ? `${m.name} has access to ${WORKSPACES[id].name}`
-                              : `${m.name} doesn't have access to ${WORKSPACES[id].name}`
-                            : granted
-                            ? `Click to remove ${m.name}'s access to ${WORKSPACES[id].name}`
-                            : `Click to give ${m.name} access to ${WORKSPACES[id].name}`
-                        }
-                        className={clsx(
-                          "rounded-full px-3 py-1 text-xs font-medium transition-all",
-                          granted ? "pill-tag" : "bg-navy/5 text-navy/30",
-                          canEdit && !isPending && "cursor-pointer hover:opacity-80 active:scale-95",
-                          isPending && "cursor-wait opacity-50",
-                          !canEdit && "cursor-default"
-                        )}
-                      >
-                        {WORKSPACES[id].name}
-                      </button>
-                    );
-                  })}
+                  {m.role === "admin" ? (
+                    <p className="text-[12px] text-charcoal/45" title="Admin always has every workspace — change their role to scope this down.">
+                      All (admin)
+                    </p>
+                  ) : (
+                    WORKSPACE_ORDER.map((id) => {
+                      const granted = Boolean(m.workspaces?.includes(id));
+                      const key = `${m.user_id}:${id}`;
+                      const isPending = pending === key;
+                      return (
+                        <button
+                          key={id}
+                          type="button"
+                          disabled={!canEdit || isPending}
+                          onClick={() => toggle(m.user_id, id, granted)}
+                          title={
+                            !canEdit
+                              ? granted
+                                ? `${m.name} has access to ${WORKSPACES[id].name}`
+                                : `${m.name} doesn't have access to ${WORKSPACES[id].name}`
+                              : granted
+                              ? `Click to remove ${m.name}'s access to ${WORKSPACES[id].name}`
+                              : `Click to give ${m.name} access to ${WORKSPACES[id].name}`
+                          }
+                          className={clsx(
+                            "rounded-full px-3 py-1 text-xs font-medium transition-all",
+                            granted ? "pill-tag" : "bg-navy/5 text-navy/30",
+                            canEdit && !isPending && "cursor-pointer hover:opacity-80 active:scale-95",
+                            isPending && "cursor-wait opacity-50",
+                            !canEdit && "cursor-default"
+                          )}
+                        >
+                          {WORKSPACES[id].name}
+                        </button>
+                      );
+                    })
+                  )}
                 </div>
                 {canEdit && !isSelf ? (
                   <button
