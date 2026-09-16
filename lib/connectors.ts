@@ -26,8 +26,15 @@ const CONNECTOR_ENV_VARS: Partial<Record<string, string[]>> = {
 };
 
 export function getConnectors(): SourceConnector[] {
-  return CONNECTORS.map((c) => ({
-    ...c,
-    connected: (CONNECTOR_ENV_VARS[c.id] ?? []).every((v) => Boolean(process.env[v])),
-  }));
+  return CONNECTORS.map((c) => {
+    const requiredVars = CONNECTOR_ENV_VARS[c.id];
+    return {
+      ...c,
+      // requiredVars undefined (no ingestion built yet) must NOT read as
+      // "connected" — [].every(...) is vacuously true on an empty array,
+      // which is exactly the bug that had zoom/drive/whatsapp showing
+      // "Connected" with zero real integration behind them.
+      connected: Boolean(requiredVars?.length) && (requiredVars ?? []).every((v) => Boolean(process.env[v])),
+    };
+  });
 }
