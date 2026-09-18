@@ -197,6 +197,39 @@ fresh full run — not something to do casually or often):
 FORCE_REFRESH=1 node scripts/ingest-fathom.mjs
 ```
 
+### Fathom webhook (real-time, no manual runs)
+
+`app/api/webhooks/fathom` (`lib/fathom-webhook.ts`) listens for Fathom's
+`new-meeting-content-ready` event and ingests that one call the moment it
+fires — same problem as Notion's original "someone has to remember to
+run the script" gap, solved the same way, except Fathom offers a real
+webhook so this is immediate rather than on a cron's schedule.
+
+Deliberately **doesn't trust the webhook payload's own field shape** for
+the actual call content — that's the least-confirmed part of this whole
+integration (no loadable official docs; see `scripts/ingest-fathom.mjs`'s
+own header comment). It only reads a meeting id off the payload, then
+re-fetches that meeting through `GET /external/v1/meetings/{id}` — the
+same endpoint the ingestion script already uses successfully, with field
+names confirmed against real data — so the payload's own uncertain shape
+never actually has to be relied on for content, just for "something
+changed, here's which meeting."
+
+Setup:
+1. In Fathom's own settings, create a webhook pointing at
+   `https://<your-deployment>/api/webhooks/fathom`.
+2. Copy the signing secret it gives you (starts with `whsec_`) into
+   `FATHOM_WEBHOOK_SECRET`.
+
+Fathom signs deliveries the same way Svix does (their own header names —
+`webhook-id`/`webhook-timestamp`/`webhook-signature` — are Svix's):
+HMAC-SHA256 over `{id}.{timestamp}.{raw body}`, keyed by the secret's
+base64 payload after its `whsec_` prefix, checked against each
+space-delimited `v1,<sig>` entry (supports secret rotation), plus a
+5-minute timestamp window against replay. `verifyFathomSignature` in
+`lib/fathom-webhook.ts` implements this from scratch — no webhook-signing
+library pulled in for one small, well-specified algorithm.
+
 ## Notion ingestion
 
 `tech.notion_docs` (see `supabase/migrations/0012_notion_docs.sql`) holds
@@ -427,7 +460,8 @@ cloud-metadata targets) since the model picks the URL, not a person.
 | `ANTHROPIC_API_KEY` | Composing the answer from retrieved context |
 | `ALINA_MODEL` | Optional override for the answer model (default `claude-sonnet-5`) |
 | `GITHUB_APP_ID` / `GITHUB_APP_PRIVATE_KEY` / `GITHUB_INSTALLATION_ID` | `scripts/ingest-github.mjs`'s GitHub App auth |
-| `FATHOM_API_KEY` | `scripts/ingest-fathom.mjs`'s Fathom API auth |
+| `FATHOM_API_KEY` | `scripts/ingest-fathom.mjs`'s Fathom API auth (also used by the webhook below to re-fetch a meeting's full content) |
+| `FATHOM_WEBHOOK_SECRET` | Verifies `/api/webhooks/fathom` deliveries (see Fathom webhook above) |
 | `NOTION_API_KEY` | `scripts/ingest-notion.mjs`'s Notion internal integration token |
 | `NOTION_EXTRA_IDS` | Optional — comma-separated page/database ids search doesn't surface (see Notion ingestion above) |
 | `TAVILY_API_KEY` | `search_web` tool in `lib/rag.ts` — live web search during Ask answers |
