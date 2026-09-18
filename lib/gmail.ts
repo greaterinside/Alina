@@ -99,6 +99,13 @@ export interface SupportEmail {
   rfc822MessageId: string;
 }
 
+/** Which mailbox GMAIL_REFRESH_TOKEN is actually authorized for — the one thing that can't be assumed from setup instructions alone. */
+export async function getAuthorizedEmailAddress(): Promise<string> {
+  const accessToken = await getAccessToken();
+  const data = await gmailFetch(accessToken, "/profile");
+  return data.emailAddress;
+}
+
 /** Unread messages in the inbox not already in support.tickets get drafted; this only lists ids + threadIds, cheap. */
 export async function listUnreadInboxMessageIds(): Promise<{ id: string; threadId: string }[]> {
   const accessToken = await getAccessToken();
