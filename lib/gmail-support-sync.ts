@@ -8,6 +8,25 @@ export interface GmailSyncResult {
   errors: string[];
 }
 
+// Ajit's request, verbatim wording he gave ("something like that") — a
+// disclosure line under every AI-drafted reply, not something a reviewer
+// can accidentally leave out by forgetting to type it themselves.
+const AI_SIGNATURE = "— Drafted in partnership with Ajit's AI and human.";
+
+/**
+ * Inserts AI_SIGNATURE right after the customer-facing body (below the
+ * sign-off) and BEFORE the "---\nINTERNAL NOTE" block from
+ * buildSupportReplySystemPrompt, if one is present — the signature is
+ * meant to be seen by the customer when this is sent, not stripped away
+ * along with the internal reviewer note.
+ */
+function appendAiSignature(draftedReply: string): string {
+  const noteMarker = "\n---\n";
+  const noteIndex = draftedReply.indexOf(noteMarker);
+  if (noteIndex === -1) return `${draftedReply}\n\n${AI_SIGNATURE}`;
+  return `${draftedReply.slice(0, noteIndex)}\n\n${AI_SIGNATURE}${draftedReply.slice(noteIndex)}`;
+}
+
 /**
  * Fires on Vercel's cron schedule (see app/api/cron/gmail-draft-replies).
  * For each unread inbox message not already in support.tickets: reads it,
@@ -48,12 +67,13 @@ export async function syncGmailSupportDrafts(supabase: any): Promise<GmailSyncRe
 
       const embedding = await embedQuery(email.bodyText);
       const context = await matchKnowledge(supabase, "assistant", embedding, 6);
-      const draftedReply = await composeAnswer({
+      const composed = await composeAnswer({
         systemPrompt: buildSupportReplySystemPrompt(),
         context,
         history: [],
         question: email.bodyText,
       });
+      const draftedReply = appendAiSignature(composed);
 
       const { error: insertError } = await supabase
         .schema("support")
