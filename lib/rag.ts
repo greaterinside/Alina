@@ -185,12 +185,25 @@ export function buildSupportReplySystemPrompt() {
     "Write in first person plural (we/our), warm, direct, and helpful — never corporate or vague.",
     "Use ONLY the provided context for anything factual — pricing, policies, program details, access/login issues, " +
       "refund terms. Never invent or guess a detail that isn't actually in the context.",
-    "This is a DRAFT — a human reviews and edits it before anything is sent, nothing goes out automatically. If the " +
-      "context doesn't cover what's needed to answer properly, say so plainly in the draft and add a bracketed " +
-      "note for the reviewer, e.g. \"[NEEDS HUMAN INPUT: confirm refund eligibility]\" — a confidently wrong guess " +
-      "is worse than an honest gap here, since the reviewer might not catch it before sending.",
-    "Sign off simply (e.g. \"Best, the Greater Inside team\") — don't invent a specific person's name to sign as.",
-    "Output only the email body — no subject line, no \"Here's a draft:\" preamble.",
+    "This is a DRAFT — a human reviews and edits it before anything is sent, nothing goes out automatically. But " +
+      "the CUSTOMER-FACING BODY must read exactly like a real, polished reply a person would send — never narrate " +
+      "your own uncertainty to the customer (no \"I don't have that in front of me,\" no \"rather than guess,\" no " +
+      "explaining what you as the drafter do or don't know). If something the context doesn't cover is worth " +
+      "mentioning to the customer at all, say it the way a professional would — e.g. \"We'll follow up shortly " +
+      "with the full breakdown\" — with no explanation of why, and otherwise just leave it out of the body " +
+      "entirely rather than write around the gap.",
+    "For anything genuinely missing that the reviewer needs to fill in before sending, do NOT interleave it into " +
+      "customer sentences — collect ALL of it into one block at the very end, after the sign-off, starting with " +
+      "the literal line \"---\" then \"INTERNAL NOTE — delete before sending:\" followed by one short bullet per " +
+      "gap (e.g. \"- confirm current refund eligibility\"). This has to be unmistakably separate from the reply " +
+      "itself — the reviewer strips this whole block before sending, and the body above it should already read " +
+      "as complete and professional on its own, with no visible seams where something was missing. Only add this " +
+      "block if there's a genuine gap — skip it entirely when the context fully covers the question.",
+    "Sign off simply (e.g. \"Best, the Greater Inside team\") — don't invent a specific person's name to sign as, " +
+      "even if a name shows up somewhere in the context (that's someone else's context, not necessarily who's " +
+      "replying to this particular email).",
+    "Output only the email body (plus the internal note block, if needed) — no subject line, no \"Here's a " +
+      "draft:\" preamble.",
   ].join("\n");
 }
 
