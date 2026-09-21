@@ -106,10 +106,22 @@ export async function getAuthorizedEmailAddress(): Promise<string> {
   return data.emailAddress;
 }
 
-/** Unread messages in the inbox not already in support.tickets get drafted; this only lists ids + threadIds, cheap. */
+/**
+ * Unread messages in the inbox not already in support.tickets get
+ * drafted; this only lists ids + threadIds, cheap.
+ *
+ * Scoped to subject:TEST ONLY — support@ already has a separate,
+ * pre-existing automation drafting replies to every real incoming email
+ * every morning (confirmed live by Ajit, not something this codebase
+ * knew about). Without this filter, this cron was quietly double-
+ * drafting on top of real customer emails for however long it ran
+ * unscoped — this restricts it to deliberately-marked test emails
+ * (subject containing "TEST," e.g. "[TEST] ...") until there's an
+ * actual decision on how — or whether — the two systems coexist.
+ */
 export async function listUnreadInboxMessageIds(): Promise<{ id: string; threadId: string }[]> {
   const accessToken = await getAccessToken();
-  const data = await gmailFetch(accessToken, "/messages?q=is:unread in:inbox&maxResults=25");
+  const data = await gmailFetch(accessToken, "/messages?q=" + encodeURIComponent("is:unread in:inbox subject:TEST") + "&maxResults=25");
   return (data.messages ?? []).map((m: any) => ({ id: m.id, threadId: m.threadId }));
 }
 
