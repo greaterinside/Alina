@@ -8,10 +8,12 @@ export interface GmailSyncResult {
   errors: string[];
 }
 
-// Ajit's request, verbatim wording he gave ("something like that") — a
-// disclosure line under every AI-drafted reply, not something a reviewer
-// can accidentally leave out by forgetting to type it themselves.
-const AI_SIGNATURE = "— Drafted in partnership with Ajit's AI and human.";
+// Ajit's requested disclosure line under every AI-drafted reply — not
+// something a reviewer can accidentally leave out by forgetting to type
+// it themselves. Revised from his first draft ("...Ajit's AI and
+// human.") after real feedback that the trailing noun pair read oddly,
+// and again to drop the em dash (reads as AI-generated on sight).
+const AI_SIGNATURE = "Drafted in partnership with Ajit's AI, reviewed by our team before sending.";
 
 /**
  * Inserts AI_SIGNATURE right after the customer-facing body (below the
