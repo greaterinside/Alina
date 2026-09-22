@@ -50,7 +50,32 @@ route, even though there's no UI to edit them yet:
 
 Both tables are proposed in `supabase/migrations/0001_roles_and_prompts.sql`
 — check it against whatever the live project's actual schema turns out to
-be before running it.
+be before running it. Neither has an in-app editor yet — still DB-only.
+
+### Saved prompt templates
+
+A third, deliberate thing, different from the two above: explicit,
+user-saved prompts someone chooses to reuse — "this exact prompt gets a
+good social output every time" — not auto-extracted memory and not a
+shared house tone. `user_preferences.saved_prompts` (a bare `text[]`)
+was reserved for this back in `0001` but nothing was ever built on it —
+confirmed via a full-codebase search before building anything here. A
+flat string array can't hold a title, an id to edit/delete one entry
+safely, or "shared with my workspace" metadata, so
+`supabase/migrations/0017_saved_prompts.sql` adds a real
+`public.saved_prompts` table instead.
+
+Personal by default; a prompt can be marked shared with everyone who
+has that workspace's access (`is_shared`), but only its owner can edit
+or delete it — sharing never creates a collision over who controls a
+template. A prompt's `body` can contain `{{variable}}` placeholders;
+picking one with variables prompts for each before dropping the
+hydrated text into the composer (`lib/saved-prompts.ts`).
+
+Reachable from Ask two ways: the sparkle button in the composer, or
+typing `/` as the first character (`components/prompts/PromptDrawer.tsx`,
+wired into `AskScreen.tsx`). "New prompt" pre-fills from whatever's
+currently typed, so saving something you just wrote is one click.
 
 ## Getting started
 
