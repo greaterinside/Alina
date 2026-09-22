@@ -12,6 +12,7 @@ import { MessageBubble } from "@/components/ask/MessageBubble";
 import { TypingAnswer } from "@/components/ask/TypingAnswer";
 import { EmptyState } from "@/components/ask/EmptyState";
 import { ReportPreviewPanel } from "@/components/ask/ReportPreviewPanel";
+import { PromptDrawer } from "@/components/prompts/PromptDrawer";
 import { useSpeech } from "@/lib/hooks/useSpeech";
 import { useVoiceInput } from "@/lib/hooks/useVoiceInput";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -53,6 +54,7 @@ export function AskScreen({
   // own content and can legitimately score too low to surface otherwise).
   const [recentUploadByWs, setRecentUploadByWs] = useState<Record<string, string>>({});
   const [openReport, setOpenReport] = useState<ReportDoc | null>(null);
+  const [promptDrawerOpen, setPromptDrawerOpen] = useState(false);
   const [loadedWorkspaces, setLoadedWorkspaces] = useState<Set<WorkspaceId>>(new Set());
   const [historyLoading, setHistoryLoading] = useState(false);
   // Holds the greeting/chips back until the particle intro has fully
@@ -217,6 +219,16 @@ export function AskScreen({
     send(promptText);
   }
 
+  // Typing "/" as the very first character opens the saved-prompts
+  // drawer instead of the button — the "/" stays in the box (cleared
+  // automatically once a prompt is picked, since that overwrites the
+  // whole input) so closing the drawer without picking anything just
+  // leaves it there to backspace, no extra state to reconcile.
+  function handleInputChange(v: string) {
+    if (v === "/" && input !== "/") setPromptDrawerOpen(true);
+    setInput(v);
+  }
+
   // Uploads go straight into the permanent knowledge base (public.uploaded_docs)
   // via /api/upload, not into this one conversation — so the confirmation/error
   // just gets posted as a normal assistant message in the current thread rather
@@ -348,12 +360,12 @@ export function AskScreen({
             <div className="mx-auto max-w-2xl">
               <Composer
                 value={input}
-                onChange={setInput}
+                onChange={handleInputChange}
                 onSubmit={() => send(input)}
                 placeholder={
                   mode === "report"
                     ? "Describe the report you need — a project recap, a status summary…"
-                    : `Ask ${WORKSPACES[workspace].name.toLowerCase() === "assistant" ? "Alina" : "about " + WORKSPACES[workspace].name.toLowerCase()}…`
+                    : `Ask ${WORKSPACES[workspace].name.toLowerCase() === "assistant" ? "Alina" : "about " + WORKSPACES[workspace].name.toLowerCase()}… (or type / for saved prompts)`
                 }
                 disabled={loading}
                 onMic={micSupported ? startMic : undefined}
@@ -361,6 +373,7 @@ export function AskScreen({
                 micSupported={micSupported}
                 onAttach={uploadDocument}
                 attaching={attaching}
+                onOpenPrompts={() => setPromptDrawerOpen(true)}
               />
             </div>
           </div>
@@ -400,13 +413,14 @@ export function AskScreen({
             <div className="mx-auto max-w-2xl">
               <Composer
                 value={input}
-                onChange={setInput}
+                onChange={handleInputChange}
                 onSubmit={() => send(input)}
-                placeholder="Describe what you need drafted — a reply, a summary, a recap…"
+                placeholder="Describe what you need drafted — a reply, a summary, a recap… (or type / for saved prompts)"
                 disabled={loading}
                 multiline
                 onAttach={uploadDocument}
                 attaching={attaching}
+                onOpenPrompts={() => setPromptDrawerOpen(true)}
               />
             </div>
           </div>
@@ -414,6 +428,13 @@ export function AskScreen({
       )}
 
       <ReportPreviewPanel report={openReport} onClose={() => setOpenReport(null)} />
+      <PromptDrawer
+        open={promptDrawerOpen}
+        onClose={() => setPromptDrawerOpen(false)}
+        workspace={workspace}
+        currentInput={input === "/" ? "" : input}
+        onUsePrompt={setInput}
+      />
       </div>
     </div>
   );

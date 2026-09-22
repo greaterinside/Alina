@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, type ChangeEvent, type KeyboardEvent } from "react";
-import { ArrowUp, Loader2, Mic, Paperclip } from "lucide-react";
+import { ArrowUp, Loader2, Mic, Paperclip, Sparkles } from "lucide-react";
 import clsx from "clsx";
 
 /** Kept in sync with lib/documents.ts's ACCEPTED_UPLOAD_TYPES. */
@@ -19,6 +19,7 @@ export function Composer({
   multiline,
   onAttach,
   attaching,
+  onOpenPrompts,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -33,6 +34,8 @@ export function Composer({
   onAttach?: (file: File) => void;
   /** Shows a spinner on the attach button while an upload is being parsed/embedded. */
   attaching?: boolean;
+  /** Opens the saved-prompts drawer — omit to hide the button entirely. */
+  onOpenPrompts?: () => void;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -80,6 +83,16 @@ export function Composer({
             {attaching ? <Loader2 size={17} className="animate-spin" /> : <Paperclip size={17} />}
           </button>
         </>
+      )}
+
+      {onOpenPrompts && (
+        <button
+          onClick={onOpenPrompts}
+          title="Saved prompts (or type / to open this)"
+          className="grid h-10 w-10 flex-none place-items-center rounded-2xl border border-white/15 text-white/55 transition-all duration-150 hover:border-white/30 hover:text-white"
+        >
+          <Sparkles size={17} />
+        </button>
       )}
 
       {onMic && (

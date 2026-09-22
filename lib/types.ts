@@ -110,6 +110,21 @@ export interface ChatMessage {
   createdAt: string;
 }
 
+/**
+ * A deliberately-saved, reusable prompt template (public.saved_prompts)
+ * — distinct from the auto-extracted personal_notes memory layer.
+ * `body` may contain {{variable}} placeholders (see lib/saved-prompts.ts).
+ */
+export interface SavedPrompt {
+  id: string;
+  user_id: string;
+  workspace: WorkspaceId;
+  title: string;
+  body: string;
+  is_shared: boolean;
+  created_at: string;
+}
+
 /** The tone/prompt profile that shapes how Alina writes in a given workspace. */
 export interface WorkspaceTone {
   workspace: WorkspaceId;
