@@ -1,0 +1,20 @@
+PASS  R1     Swing = extreme of 7 bars (K=3), confirmed only after 3 later bars
+PASS  R1     Equal highs/lows in one window (ties) — notes silent
+        note: ties found in this data: none
+PASS  R2/R1  Bias from HH/HL vs LH/LL, close (not wick) beyond last swing overrides it; mixed = stand aside
+        note: BOS changed the bias on 37 day(s); on 4 of them it flipped a clean opposite trend outright (2026-04-28 bull->bear, 2026-04-29 bull->bear, 2026-05-04 bull->bear, 2026-05-05 bull->bear). Notes don't say BOS can do this; Nikhil should confirm
+PASS  R3     Weekly read uses completed weeks only, k=2
+        note: Known flaw confirmed: on Fridays the just-finished week is dropped (34 trade-call Fridays affected). Latent trace gap: a weekly break of structure can set the weekly bias, but the R3 trace line only prints the HH/HL read. Happens on 0 call days in this data.
+PASS  R4/R5  A = last swing low before last swing high (mirror for bear), B = extreme since A, entry 50%, zone to 78.6%, invalidation 85.4%, stand aside if close already beyond
+        note: stand-aside for 'thesis already void' on 4 day(s)
+PASS  R7/R9  Divergence only lowers confidence by 12; confidence = 55 +15/-10 weekly -12 divergence, clamped 30-80
+PASS  R9     Confidence range
+        note: values seen: 33, 43, 45, 55, 58, 70. The formula can only produce 33-70, so the 30-80 clamp never applies. Harmless, but the trace says "Capped between 30 and 80".
+PASS  R7     MACD histogram is 12/26/9 on daily closes
+PASS  R8     No fills on an FOMC day or the day before
+        note: FOMC dates inside the data: 2025-10-29, 2025-12-10, 2026-01-28, 2026-03-18, 2026-04-29, 2026-06-17, 2026-07-29, 2026-09-16. Trace wording: "Inside the FOMC window. No new fills today or tomorrow" is shown on FOMC day itself, but the day after FOMC is NOT gated: wrong on 5 call day(s) (2026-01-28 (next session 2026-01-29 is not gated); 2026-03-18 (next session 2026-03-19 is not gated); 2026-04-29 (next session 2026-04-30 is not gated); 2026-06-17 (next session 2026-06-18 is not gated); 2026-09-16 (next session 2026-09-17 is not gated)).
+PASS  R6     Limit at 50% line, lives 3 sessions, fill = entry or gapped open, target = 78.6% from fill toward B, hold 5
+        note: Not in notes: the target is not checked on the fill day itself (only the stop is). Days where the fill-day bar already touched the target: 8. Interpretation for Nikhil: RULES.R6 says "78 to 85 percent recovery of the leg"; the code targets 78.6% of the distance from the fill back to B, which from a 50% fill is about 39% of the whole leg.
+PASS  BT     One trade at a time (hold 5)
+        note: Same setup (identical entry and stop) traded twice back to back: 2026-03-26 and 2026-04-09. Notes don't say whether a setup can be re-used after its first trade ends.
+PASS  BT     One trade at a time (hold 10)

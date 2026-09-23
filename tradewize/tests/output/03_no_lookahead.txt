@@ -1,0 +1,5 @@
+Days where analyze() throws on a short history: 0
+A. slice test (bars up to t only): 252 days checked, 0 mismatch(es)
+B. scramble test (future bars replaced with random prices): 252 days checked, 0 mismatch(es)
+Calls over all 252 days: {"STAND ASIDE":74,"LONG":99,"SHORT":79}
+PASS: no look-ahead found

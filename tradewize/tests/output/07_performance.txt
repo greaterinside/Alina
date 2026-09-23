@@ -1,0 +1,16 @@
+ema() calls inside one macdHist() on 252 closes: 254 (a correct version needs 3)
+Current engine (as shipped):
+  macdHist(252 closes): 0.94 ms
+  analyze(one day): 2.76 ms
+  backtest HOLD=5: 182 ms, HOLD=10: 162 ms
+  Backtest tab click (backtest + direction check): 477 ms
+  Page load work (read + backtest): 476 ms
+Projection with the Phase 3 fix (NOT applied yet):
+  macdHist(252 closes): 0.08 ms
+  analyze(one day): 1.26 ms
+  backtest HOLD=5: 96 ms, HOLD=10: 100 ms
+  Backtest tab click (backtest + direction check): 256 ms
+  Page load work (read + backtest): 275 ms
+Max difference in histogram between the two: 0
+Speed-up: macdHist 11x, backtest 1.9x
+macdHist on 1260 closes (about 5 years): current 15 ms, fixed 0.1 ms

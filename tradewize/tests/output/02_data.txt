@@ -1,0 +1,17 @@
+Wrote /home/user/Alina/tradewize/gold_daily_gcf.csv
+Rows: 252 (expected 252)
+First: 2025-09-18  Last: 2026-09-18 (expected 2025-09-18 to 2026-09-18)
+Weekdays with no bar: 10
+  2025-11-27 (Thanksgiving)
+  2025-12-25 (Christmas)
+  2026-01-01 (New Year)
+  2026-01-19 (MLK Day)
+  2026-02-16 (Presidents Day)
+  2026-04-03 (Good Friday)
+  2026-05-25 (Memorial Day)
+  2026-06-19 (Juneteenth)
+  2026-07-03 (Independence Day (observed))
+  2026-09-07 (Labor Day)
+Daily close moves over 4%: 2025-10-21 close -5.7%; 2025-12-29 close -4.6%; 2026-01-28 close 4.3%; 2026-01-30 close -10.8%; 2026-02-03 close 6.1%; 2026-03-19 close -5.9%
+Price range: 3660.5 to 5586.2
+PASS: no bad values, no duplicates, dates ascending

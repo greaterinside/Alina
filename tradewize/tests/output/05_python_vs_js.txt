@@ -1,0 +1,35 @@
+Python reads: gold.csv
+
+--- A. As shipped (only the CSV path redirected) ---
+Daily setups: 252 days, 0 with a different call/levels/confidence
+  Same call but different 'why' text: 37
+  2025-09-18: py='daily structure none: Plan A/B only, no trade' js='not enough structure'
+  2025-09-19: py='daily structure none: Plan A/B only, no trade' js='not enough structure'
+  2025-09-22: py='daily structure none: Plan A/B only, no trade' js='not enough structure'
+  2025-09-23: py='daily structure none: Plan A/B only, no trade' js='not enough structure'
+  2025-09-24: py='daily structure none: Plan A/B only, no trade' js='not enough structure'
+Backtest HOLD=5: python 14 rows, js 14 rows, python net points 540.2, 0 difference(s)
+Backtest HOLD=10: python 11 rows, js 11 rows, python net points 728.2, 0 difference(s)
+
+--- B. Known difference 1: extra BOS condition sh[-1] < upto ---
+Days where the last swing index is >= t (the only case the extra condition matters): 0
+Daily setups with JS-style BOS: 252 days, 0 with a different call/levels/confidence
+  Same call but different 'why' text: 37
+  2025-09-18: py='daily structure none: Plan A/B only, no trade' js='not enough structure'
+  2025-09-19: py='daily structure none: Plan A/B only, no trade' js='not enough structure'
+  2025-09-22: py='daily structure none: Plan A/B only, no trade' js='not enough structure'
+  2025-09-23: py='daily structure none: Plan A/B only, no trade' js='not enough structure'
+  2025-09-24: py='daily structure none: Plan A/B only, no trade' js='not enough structure'
+
+--- C. Known difference 2: FOMC list ---
+JS-only FOMC dates: ['2026-10-28', '2026-12-09']. Last bar in data: 2026-09-18.
+Any JS-only date within one day after the last bar? False
+Backtest HOLD=5: python 14 rows, js 14 rows, python net points 540.2, 0 difference(s)
+Backtest HOLD=10: python 11 rows, js 11 rows, python net points 728.2, 0 difference(s)
+
+--- D. Python's own run() (a different backtest method) ---
+run() HOLD=5: 17 closed trades, 6 win / 2 loss, statuses {'WIN': 6, 'EXPIRED+': 6, 'EXPIRED-': 3, 'LOSS': 2}
+run() HOLD=10: 17 closed trades, 9 win / 3 loss, statuses {'WIN': 9, 'EXPIRED+': 3, 'LOSS': 3, 'EXPIRED-': 2}
+run() de-duplicates by (call, A, B) and allows overlapping trades; JS backtest() takes one trade at a time. So run() does NOT reproduce the published table and cannot be used to cross-check it.
+
+RESULT: PASS

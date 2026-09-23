@@ -1,0 +1,26 @@
+
+=== desktop 1280px ===
+title: "Tradewize Gold Engine v0", favicon: false
+call shown: Short, trace steps: 11, backtest rows: 14
+stats: ["67%Target before stop: 4 of 6. Benchmark 75%.","62%Profitable at exit, expired trades included: 13 closed trades","+540Net points, one contract, no costs","53%Daily bias right 5 sessions later, 159 calls. This is the coin-flip test, no entry discipline."]
+horizontal overflow (px) read/backtest/data: 0/0/0
+JS errors: Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID
+external requests: fonts.googleapis.com
+visible text mentioning 75%: 
+  - Benchmark 75%
+  - The 75% benchmark Nikhil set on the call is measured here as target-before-stop
+  - Benchmark 75%
+
+=== phone 375px ===
+title: "Tradewize Gold Engine v0", favicon: false
+call shown: Short, trace steps: 11, backtest rows: 14
+stats: ["67%Target before stop: 4 of 6. Benchmark 75%.","62%Profitable at exit, expired trades included: 13 closed trades","+540Net points, one contract, no costs","53%Daily bias right 5 sessions later, 159 calls. This is the coin-flip test, no entry discipline."]
+horizontal overflow (px) read/backtest/data: 0/0/0
+JS errors: Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID
+external requests: fonts.googleapis.com
+visible text mentioning 75%: 
+  - Benchmark 75%
+  - The 75% benchmark Nikhil set on the call is measured here as target-before-stop
+  - Benchmark 75%
+
+FAIL (see above)
